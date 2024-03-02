@@ -32,6 +32,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 {
     [Gui.CategoryOrder("Buy/Sell Filters", 1)]
     [Gui.CategoryOrder("Advanced", 2)]
+    [Gui.CategoryOrder("Colors", 3)]
 
     public class BarCount : Indicator
     {
@@ -65,6 +66,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Red_Brush = Brushes.Red;
 
                 iMinADX = 0;
+
+                bLindaCandle = false;
+                bWaddahCandle = false;
+                iWaddahIntense = 160;
+                iWaddahBuffer = 80;
+                iLindaIntense = 40;
 
                 bShowTramp = true;          // SHOW
                 bShowMACDPSARArrow = true;
@@ -121,13 +128,19 @@ namespace NinjaTrader.NinjaScript.Indicators
             Print("Linda = " + lindaMD.ToString());
             //DrawText(lindaMD.ToString(), Brushes.White);
 
+            var filteredLinda = Math.Min(Math.Abs(lindaMD) * iLindaIntense, 255);
+            var cCoLorLinda = lindaMD > 0 ? Color.FromArgb(255, 0, (byte)filteredLinda, 0) : Color.FromArgb(255, (byte)filteredLinda, 0, 0);
+
             double Trend1, Trend2, Explo1, Explo2, Dead;
-            Trend1 = (MACD(20, 40, 9)[0] - MACD(20, 40, 9)[1]) * 150;
-            Trend2 = (MACD(20, 40, 9)[2] - MACD(20, 40, 9)[3]) * 150;
+            Trend1 = (MACD(20, 40, 9)[0] - MACD(20, 40, 9)[1]) * iWaddahIntense;
+            Trend2 = (MACD(20, 40, 9)[2] - MACD(20, 40, 9)[3]) * iWaddahIntense;
             Explo1 = Bollinger(2, 20).Upper[0] - Bollinger(2, 20).Lower[0];
             Explo2 = Bollinger(2, 20).Upper[1] - Bollinger(2, 20).Lower[1];
             Dead = TickSize * 30;
             bool wadaUp = Trend1 >= 0 ? true : false;
+
+            var waddah = Math.Min(Math.Abs(Trend1) + iWaddahBuffer, 255);
+            var cCoLorWaddah = Trend1 >= 0 ? Color.FromArgb(255, 0, (byte)waddah, 0) : Color.FromArgb(255, (byte)waddah, 0, 0);
 
             Supertrend st = Supertrend(2, 11);
             bool superUp = st.Value[0] < Low[0] ? true : false;
@@ -152,12 +165,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             ADX x = ADX(10);
             KAMA kama = KAMA(2, 9, 109);
-
             RSI rsi = RSI(14, 1);
 
             bool sqeezeUp = false;
 
             #endregion
+
+            if (bWaddahCandle)
+                BarBrush = new SolidColorBrush(cCoLorWaddah);
+
+            if (bLindaCandle)
+                BarBrush = new SolidColorBrush(cCoLorLinda);
 
             #region CANDLE CALCULATIONS
 
@@ -240,6 +258,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             #endregion
 
+            #region DISPLAY BUY / SELL
+
             // ========================    UP CONDITIONS    ===========================
 
             if ((!macdUp && bUseMACD) || (!psarUp && bUsePSAR) || (!fisherUp && bUseFisher) || (!t3Up && bUseT3) || (!wadaUp && bUseWaddah) || (!superUp && bUseSuperTrend) || (!sqeezeUp && bUseSqueeze) || x.Value[0] < iMinADX || (bUseHMA && !hullUp))
@@ -291,10 +311,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                     DrawText("TR", Brushes.Yellow, false, true);
             }
 
+            #endregion
+
             //Print(bb.Values[0][0] + " " + bb.Values[1][0] + " " + bb.Values[2][0]);
 
             //if (Close[0] > hma.Value[0] && false)
-                //Draw.Text(this, "Total Bars " + CurrentBar, "Dot", 0, High[0] + 1 * TickSize, TBBrush);
+            //Draw.Text(this, "Total Bars " + CurrentBar, "Dot", 0, High[0] + 1 * TickSize, TBBrush);
             //Draw.ArrowUp(this, CurrentBar.ToString(), true, DateTime.Now, Low[0] - 1 * TickSize, TBBrush);
 
         }
@@ -400,18 +422,39 @@ namespace NinjaTrader.NinjaScript.Indicators
         [Display(Name = "Show Advanced Signals", GroupName = "Advanced", Order = 7)]
         public bool bShowAdvanced { get; set; }
 
+
+        [NinjaScriptProperty]
+        [Display(Name = "Show Waddah Candles", GroupName = "Colored Candles", Order = 1)]
+        public bool bWaddahCandle { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Waddah Intensity", GroupName = "Colored Candles", Order = 2)]
+        public int iWaddahIntense { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Waddah Buffer", GroupName = "Colored Candles", Order = 3)]
+        public int iWaddahBuffer { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Show Linda MACD Candles", GroupName = "Colored Candles", Order = 4)]
+        public bool bLindaCandle { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Linda MACD Intensity", GroupName = "Colored Candles", Order = 5)]
+        public int iLindaIntense { get; set; }
+
         [XmlIgnore]
         [Display(Name = "Volume Imbalance Color", GroupName = "Colors", Order = 1)]
         public Brush VI_Brush
         { get; set; }
 
         [XmlIgnore]
-        [Display(Name = "Green Brush Color", GroupName = "Colors", Order = 2)]
+        [Display(Name = "Green Global Color", GroupName = "Colors", Order = 2)]
         public Brush Green_Brush
         { get; set; }
 
         [XmlIgnore]
-        [Display(Name = "Red Brush Color", GroupName = "Colors", Order = 3)]
+        [Display(Name = "Red Global Color", GroupName = "Colors", Order = 3)]
         public Brush Red_Brush
         { get; set; }
 
@@ -426,18 +469,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private BarCount[] cacheBarCount;
-		public BarCount BarCount(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced)
+		public BarCount BarCount(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return BarCount(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced);
+			return BarCount(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 
-		public BarCount BarCount(ISeries<double> input, bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced)
+		public BarCount BarCount(ISeries<double> input, bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
 			if (cacheBarCount != null)
 				for (int idx = 0; idx < cacheBarCount.Length; idx++)
-					if (cacheBarCount[idx] != null && cacheBarCount[idx].bUseWaddah == bUseWaddah && cacheBarCount[idx].bUseAO == bUseAO && cacheBarCount[idx].bUsePSAR == bUsePSAR && cacheBarCount[idx].bUseSqueeze == bUseSqueeze && cacheBarCount[idx].bUseMACD == bUseMACD && cacheBarCount[idx].bUseHMA == bUseHMA && cacheBarCount[idx].bUseSuperTrend == bUseSuperTrend && cacheBarCount[idx].bUseT3 == bUseT3 && cacheBarCount[idx].bUseFisher == bUseFisher && cacheBarCount[idx].iMinADX == iMinADX && cacheBarCount[idx].bShowRegularBuySell == bShowRegularBuySell && cacheBarCount[idx].bShowMACDPSARArrow == bShowMACDPSARArrow && cacheBarCount[idx].bVolumeImbalances == bVolumeImbalances && cacheBarCount[idx].bShowTramp == bShowTramp && cacheBarCount[idx].bShowSqueeze == bShowSqueeze && cacheBarCount[idx].bShowRevPattern == bShowRevPattern && cacheBarCount[idx].bShowAdvanced == bShowAdvanced && cacheBarCount[idx].EqualsInput(input))
+					if (cacheBarCount[idx] != null && cacheBarCount[idx].bUseWaddah == bUseWaddah && cacheBarCount[idx].bUseAO == bUseAO && cacheBarCount[idx].bUsePSAR == bUsePSAR && cacheBarCount[idx].bUseSqueeze == bUseSqueeze && cacheBarCount[idx].bUseMACD == bUseMACD && cacheBarCount[idx].bUseHMA == bUseHMA && cacheBarCount[idx].bUseSuperTrend == bUseSuperTrend && cacheBarCount[idx].bUseT3 == bUseT3 && cacheBarCount[idx].bUseFisher == bUseFisher && cacheBarCount[idx].iMinADX == iMinADX && cacheBarCount[idx].bShowRegularBuySell == bShowRegularBuySell && cacheBarCount[idx].bShowMACDPSARArrow == bShowMACDPSARArrow && cacheBarCount[idx].bVolumeImbalances == bVolumeImbalances && cacheBarCount[idx].bShowTramp == bShowTramp && cacheBarCount[idx].bShowSqueeze == bShowSqueeze && cacheBarCount[idx].bShowRevPattern == bShowRevPattern && cacheBarCount[idx].bShowAdvanced == bShowAdvanced && cacheBarCount[idx].bWaddahCandle == bWaddahCandle && cacheBarCount[idx].iWaddahIntense == iWaddahIntense && cacheBarCount[idx].iWaddahBuffer == iWaddahBuffer && cacheBarCount[idx].bLindaCandle == bLindaCandle && cacheBarCount[idx].iLindaIntense == iLindaIntense && cacheBarCount[idx].EqualsInput(input))
 						return cacheBarCount[idx];
-			return CacheIndicator<BarCount>(new BarCount(){ bUseWaddah = bUseWaddah, bUseAO = bUseAO, bUsePSAR = bUsePSAR, bUseSqueeze = bUseSqueeze, bUseMACD = bUseMACD, bUseHMA = bUseHMA, bUseSuperTrend = bUseSuperTrend, bUseT3 = bUseT3, bUseFisher = bUseFisher, iMinADX = iMinADX, bShowRegularBuySell = bShowRegularBuySell, bShowMACDPSARArrow = bShowMACDPSARArrow, bVolumeImbalances = bVolumeImbalances, bShowTramp = bShowTramp, bShowSqueeze = bShowSqueeze, bShowRevPattern = bShowRevPattern, bShowAdvanced = bShowAdvanced }, input, ref cacheBarCount);
+			return CacheIndicator<BarCount>(new BarCount(){ bUseWaddah = bUseWaddah, bUseAO = bUseAO, bUsePSAR = bUsePSAR, bUseSqueeze = bUseSqueeze, bUseMACD = bUseMACD, bUseHMA = bUseHMA, bUseSuperTrend = bUseSuperTrend, bUseT3 = bUseT3, bUseFisher = bUseFisher, iMinADX = iMinADX, bShowRegularBuySell = bShowRegularBuySell, bShowMACDPSARArrow = bShowMACDPSARArrow, bVolumeImbalances = bVolumeImbalances, bShowTramp = bShowTramp, bShowSqueeze = bShowSqueeze, bShowRevPattern = bShowRevPattern, bShowAdvanced = bShowAdvanced, bWaddahCandle = bWaddahCandle, iWaddahIntense = iWaddahIntense, iWaddahBuffer = iWaddahBuffer, bLindaCandle = bLindaCandle, iLindaIntense = iLindaIntense }, input, ref cacheBarCount);
 		}
 	}
 }
@@ -446,14 +489,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.BarCount BarCount(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced)
+		public Indicators.BarCount BarCount(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.BarCount(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced);
+			return indicator.BarCount(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 
-		public Indicators.BarCount BarCount(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced)
+		public Indicators.BarCount BarCount(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.BarCount(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced);
+			return indicator.BarCount(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 	}
 }
@@ -462,14 +505,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.BarCount BarCount(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced)
+		public Indicators.BarCount BarCount(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.BarCount(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced);
+			return indicator.BarCount(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 
-		public Indicators.BarCount BarCount(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced)
+		public Indicators.BarCount BarCount(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.BarCount(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced);
+			return indicator.BarCount(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 	}
 }
