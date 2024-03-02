@@ -127,6 +127,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             Explo1 = Bollinger(2, 20).Upper[0] - Bollinger(2, 20).Lower[0];
             Explo2 = Bollinger(2, 20).Upper[1] - Bollinger(2, 20).Lower[1];
             Dead = TickSize * 30;
+            bool wadaUp = Trend1 >= 0 ? true : false;
 
             Supertrend st = Supertrend(2, 11);
             bool superUp = st.Value[0] < Low[0] ? true : false;
@@ -135,7 +136,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool fisherUp = ft.Value[0] > ft.Value[1] ? true : false;
 
             //WaddahAttarExplosion wae = WaddahAttarExplosion(150, 30, 15, 1, false, 1, false, false, false, false);
-            bool wadaUp = Trend1 > 0 ? true : false;
 
             ParabolicSAR sar = ParabolicSAR(0.02, 0.2, 0.02);
             bool psarUp = sar.Value[0] < Low[0] ? true : false;
