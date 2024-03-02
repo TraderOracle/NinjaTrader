@@ -19,6 +19,11 @@ using NinjaTrader.Data;
 using NinjaTrader.NinjaScript;
 using NinjaTrader.Core.FloatingPoint;
 using NinjaTrader.NinjaScript.DrawingTools;
+using System.Runtime.InteropServices;
+using System.Drawing;
+using Color = System.Drawing.Color;
+using MColor = System.Windows.Media.Color;
+using MColors = System.Windows.Media.Colors;
 #endregion
 
 //This namespace holds Indicators in this folder and is required. Do not change it. 
@@ -26,6 +31,8 @@ namespace NinjaTrader.NinjaScript.Indicators
 {
 	public class Ratchet : Indicator
 	{
+        private int iJunk = 0;
+
         // SuperTrend
         private double barHighValue, barLowValue, bottomValue, topValue;
         private Series<double> atrSeries, bottomSeries, topSeries, Default;
@@ -74,6 +81,93 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		protected override void OnBarUpdate()
 		{
+            int pbar = CurrentBar;
+            double _tick = TickSize;
+            double bb_top = 0;
+            double bb_bottom = 0;
+
+            ADX x = ADX(10);
+            KAMA kama = KAMA(2, 9, 109);
+            FisherTransform ft = FisherTransform(10);
+            T3 t3 = T3(10, 1, 1);
+            ParabolicSAR sar = ParabolicSAR(0.2, 0.2, 2);
+            RSI rsi = RSI(14, 0);
+            HMA hma = HMA(14);
+
+            var red = Close[0] < Open[0];
+            var green = Close[0] > Open[0];
+            var c0G = Open[0] < Close[0];
+            var c0R = Open[0] > Close[0];
+            var c1G = Open[1] < Close[1];
+            var c1R = Open[1] > Close[1];
+            var c2G = Open[2] < Close[2];
+            var c2R = Open[2] > Close[2];
+            var c3G = Open[3] < Close[3];
+            var c3R = Open[3] > Close[3];
+            var c4G = Open[4] < Close[4];
+            var c4R = Open[4] > Close[4];
+
+            var c0Body = Math.Abs(Close[0] - Open[0]);
+            var c1Body = Math.Abs(Close[1] - Open[1]);
+            var c2Body = Math.Abs(Close[2] - Open[2]);
+            var c3Body = Math.Abs(Close[3] - Open[3]);
+            var c4Body = Math.Abs(Close[4] - Open[4]);
+
+            var upWickLarger = c0R && Math.Abs(High[0] - Open[0]) > Math.Abs(Low[0] - Close[0]);
+            var downWickLarger = c0G && Math.Abs(Low[0] - Open[0]) > Math.Abs(Close[0] - High[0]);
+
+            var ThreeOutUp = c2R && c1G && c0G && Open[1] < Close[2] && Open[2] < Close[1] && Math.Abs(Open[1] - Close[1]) > Math.Abs(Open[2] - Close[2]) && Close[0] > Low[1];
+
+            var ThreeOutDown = c2G && c1R && c0R && Open[1] > Close[2] && Open[2] > Close[1] && Math.Abs(Open[1] - Close[1]) > Math.Abs(Open[2] - Close[2]) && Close[0] < Low[1];
+
+            var eqHigh = c0R && c1R && c2G && c3G && (High[1] > bb_top || High[2] > bb_top) && Close[0] < Close[1] && (Open[1] == Close[2] || Open[1] == Close[2] + _tick || Open[1] + _tick == Close[2]);
+
+            var eqLow = c0G && c1G && c2R && c3R && (Low[1] < bb_bottom || Low[2] < bb_bottom) && Close[0] > Close[1] && (Open[1] == Close[2] || Open[1] == Close[2] + _tick || Open[1] + _tick == Close[2]);
+
+            // if (bVolumeImbalances)
+            {
+                // var highPen = new Pen(new SolidBrush(Color.RebeccaPurple)) { Width = 2 };
+                if (green && c1G && Open[0] > Close[1])
+                {
+                    // HorizontalLinesTillTouch.Add(new LineTillTouch(pbar, Open[0], highPen));
+                    // _negWhite[pbar] = candle.Low - (_tick * 2);
+                }
+                if (red && c1R && Open[0] < Close[1])
+                {
+                    // HorizontalLinesTillTouch.Add(new LineTillTouch(pbar, Open[0], highPen));
+                    // _posWhite[pbar] = candle.High + (_tick * 2);
+                }
+            }
+
+            //if (bAdvanced)
+            {
+                if (c4Body > c3Body && c3Body > c2Body && c2Body > c1Body && c1Body > c0Body)
+                    if ((Close[0] > Close[1] && Close[1] > Close[2] && Close[2] > Close[3]) ||
+                    (Close[0] < Close[1] && Close[1] < Close[2] && Close[2] < Close[3]))
+                        iJunk = 0;
+                        DrawText(pbar, "Stairs", Color.Yellow, Color.Transparent);
+            }
+
+            //if (bShowRevPattern)
+            {
+/*
+                if (c0R && High[0] > bb_top && Open[0] < bb_top && Open[0] > Close[1] && upWickLarger)
+                    DrawText(pbar, "Wick", Color.Yellow, Color.Transparent, false, true);
+                if (c0G && Lo[0]w < bb_bottom && Open[0] > bb_bottom && Open[0] > Close[1] && downWickLarger)
+                    DrawText(pbar, "Wick", Color.Yellow, Color.Transparent, false, true);
+
+                if (c0G && c1R && c2R && VolSec(p1C) > VolSec(p2C) && VolSec(p2C) > VolSec(p3C) && candle.Delta < 0)
+                    DrawText(pbar, "Vol\nRev", Color.Yellow, Color.Transparent, false, true);
+                if (c0R && c1G && c2G && VolSec(p1C) > VolSec(p2C) && VolSec(p2C) > VolSec(p3C) && candle.Delta > 0)
+                    DrawText(pbar, "Vol\nRev", Color.Lime, Color.Transparent, false, true);
+
+                if (ThreeOutUp)
+                    DrawText(pbar, "3oU", Color.Yellow, Color.Transparent);
+                if (ThreeOutDown && bShowRevPattern)
+                    DrawText(pbar, "3oD", Color.Yellow, Color.Transparent);
+*/
+            }
+
             #region WADDAH EXPLOSION
 
             if (CurrentBars[0] > 2)
@@ -135,7 +229,15 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 
         }
-    }
+
+//        private decimal VolSec(Candle c) { return c.Volume / Convert.ToDecimal((c.LastTime - c.Time).TotalSeconds); }
+
+        protected void DrawText(int bBar, String strX, Color cI, Color cB, bool bOverride = false, bool bSwap = false)
+        {
+
+        }
+
+        }
 }
 
 #region NinjaScript generated code. Neither change nor remove.
