@@ -119,7 +119,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool macdUp = lindaMD > 0;
 
             Print("Linda = " + lindaMD.ToString());
-            //DrawText(Math.Round(lindaMD).ToString(), Brushes.White);
+            //DrawText(lindaMD.ToString(), Brushes.White);
 
             double Trend1, Trend2, Explo1, Explo2, Dead;
             Trend1 = (MACD(20, 40, 9)[0] - MACD(20, 40, 9)[1]) * 150;
@@ -147,9 +147,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             HMA hma = HMA(14);
             bool hullUp = hma.Value[0] > hma.Value[1];
 
+            T3 t3 = T3(10, 2, 0.7);
+            bool t3Up = Close[0] > t3.Value[0];
+
             ADX x = ADX(10);
             KAMA kama = KAMA(2, 9, 109);
-            T3 t3 = T3(10, 1, 1);
+
             RSI rsi = RSI(14, 1);
 
             bool sqeezeUp = false;
@@ -239,7 +242,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // ========================    UP CONDITIONS    ===========================
 
-            if ((!macdUp && bUseMACD) || (!psarUp && bUsePSAR) || (!fisherUp && bUseFisher) || (Close[0] < t3.Value[0] && bUseT3) || (!wadaUp && bUseWaddah) || (!superUp && bUseSuperTrend) || (!sqeezeUp && bUseSqueeze) || x.Value[0] < iMinADX || (bUseHMA && !hullUp))
+            if ((!macdUp && bUseMACD) || (!psarUp && bUsePSAR) || (!fisherUp && bUseFisher) || (!t3Up && bUseT3) || (!wadaUp && bUseWaddah) || (!superUp && bUseSuperTrend) || (!sqeezeUp && bUseSqueeze) || x.Value[0] < iMinADX || (bUseHMA && !hullUp))
                 bShowUp = false;
 
             if (green && bShowUp && bShowRegularBuySell)
@@ -247,7 +250,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // ========================    DOWN CONDITIONS    =========================
 
-            if ((macdUp && bUseMACD) || (psarUp && bUsePSAR) || (fisherUp && bUseFisher) || (Close[0] > t3.Value[0] && bUseT3) || (wadaUp && bUseWaddah) || (superUp && bUseSuperTrend) || (sqeezeUp && bUseSqueeze) || x.Value[0] < iMinADX || (bUseHMA && hullUp))
+            if ((macdUp && bUseMACD) || (psarUp && bUsePSAR) || (fisherUp && bUseFisher) || (t3Up && bUseT3) || (wadaUp && bUseWaddah) || (superUp && bUseSuperTrend) || (sqeezeUp && bUseSqueeze) || x.Value[0] < iMinADX || (bUseHMA && hullUp))
                 bShowDown = false;
 
             if (red && bShowDown && bShowRegularBuySell)
