@@ -22,6 +22,7 @@ using NinjaTrader.Core.FloatingPoint;
 using NinjaTrader.NinjaScript.DrawingTools;
 using NinjaTrader.NinjaScript.SuperDomColumns;
 using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 
 #endregion
 
@@ -95,14 +96,28 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             #region INDICATOR CALCULATIONS
 
+            // Linda MACD
+            var llong = SMA(10).Value[0];
+            var lshort = SMA(3).Value[0];
+            var lsignal = SMA(16).Value[0];
+            var lindaMD = (lshort = llong) - lsignal;
+            Print("Linda = " + lindaMD);
+
+            double Trend1, Trend2, Explo1, Explo2, Dead;
+            Trend1 = (MACD(20, 40, 9)[0] - MACD(20, 40, 9)[1]) * 150;
+            Trend2 = (MACD(20, 40, 9)[2] - MACD(20, 40, 9)[3]) * 150;
+            Explo1 = Bollinger(2, 20).Upper[0] - Bollinger(2, 20).Lower[0];
+            Explo2 = Bollinger(2, 20).Upper[1] - Bollinger(2, 20).Lower[1];
+            Dead = TickSize * 30;
+
             Supertrend st = Supertrend(2, 11);
             bool superUp = st.Value[0] < Low[0] ? true : false;
 
             FisherTransform ft = FisherTransform(10);
             bool fisherUp = ft.Value[0] > ft.Value[1] ? true : false;
 
-            WaddahAttarExplosion wae = WaddahAttarExplosion(150, 30, 15, 1, false, 1, false, false, false, false);
-            bool wadaUp = wae.Value[0] > 0 ? true : false;
+            //WaddahAttarExplosion wae = WaddahAttarExplosion(150, 30, 15, 1, false, 1, false, false, false, false);
+            bool wadaUp = Trend1 > 0 ? true : false;
 
             ParabolicSAR sar = ParabolicSAR(0.02, 0.2, 0.02);
             bool psarUp = sar.Value[0] < Low[0] ? true : false;
@@ -119,8 +134,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             T3 t3 = T3(10, 1, 1);
             RSI rsi = RSI(14, 1);
 
-            bool macdUp = false;
-            bool macdDown = false;
+            bool macdUp = lindaMD > 0;
             bool sqeezeUp = false;
 
             #endregion
@@ -334,7 +348,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         public bool bUseFisher { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Minimum ADX", GroupName = "Buy/Sell Filters", Order = 9)]
+        [Display(Name = "Minimum ADX", GroupName = "Buy/Sell Filters", Order = 10)]
         public int iMinADX { get; set; }
         
 
