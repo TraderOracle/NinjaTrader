@@ -23,6 +23,7 @@ using NinjaTrader.NinjaScript.DrawingTools;
 using NinjaTrader.NinjaScript.SuperDomColumns;
 using System.Runtime.InteropServices;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
 
 #endregion
 
@@ -41,6 +42,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         }
 
         List<lines> ll = new List<lines>();
+
+        private SMA EMAS;
+        private SMA EMAF;
+        private Series<double> MACD1;
+        private Series<double> LMACD;
 
         protected override void OnStateChange()
         {
@@ -77,6 +83,16 @@ namespace NinjaTrader.NinjaScript.Indicators
                 bUseAO = false;
                 bUseHMA = false;
             }
+            else if (State == State.Configure)
+            {
+                MACD1 = new Series<double>(this);
+                LMACD = new Series<double>(this);
+            }
+            else if (State == State.DataLoaded)
+            {
+                EMAF = SMA(3);
+                EMAS = SMA(10);
+            }
         }
 
         protected override void OnBarUpdate()
@@ -97,11 +113,13 @@ namespace NinjaTrader.NinjaScript.Indicators
             #region INDICATOR CALCULATIONS
 
             // Linda MACD
-            var llong = SMA(10).Value[0];
-            var lshort = SMA(3).Value[0];
-            var lsignal = SMA(16).Value[0];
-            var lindaMD = (lshort = llong) - lsignal;
-            Print("Linda = " + lindaMD);
+            double lindaMD = 0;
+            MACD1[0] = EMAF[0] - EMAS[0];
+            lindaMD = MACD1[0] - SMA(MACD1, 16)[0];
+            bool macdUp = lindaMD > 0;
+
+            Print("Linda = " + lindaMD.ToString());
+            //DrawText(Math.Round(lindaMD).ToString(), Brushes.White);
 
             double Trend1, Trend2, Explo1, Explo2, Dead;
             Trend1 = (MACD(20, 40, 9)[0] - MACD(20, 40, 9)[1]) * 150;
@@ -134,7 +152,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             T3 t3 = T3(10, 1, 1);
             RSI rsi = RSI(14, 1);
 
-            bool macdUp = lindaMD > 0;
             bool sqeezeUp = false;
 
             #endregion
@@ -191,9 +208,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                 {
                     if (High[0] > li.loc && Low[0] < li.loc)
                     {
-                        Print(li.tag);
+                        //Print(li.tag);
                         int barsAgo = (CurrentBar - Convert.ToInt16(li.tag));
-                        Print(barsAgo);
+                        //Print(barsAgo);
                         Draw.Line(this, li.tag, 0, li.loc, barsAgo, li.loc, VI_Brush);
                         ll.RemoveAt(ix);
                         break;
