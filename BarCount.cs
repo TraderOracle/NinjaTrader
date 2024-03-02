@@ -95,7 +95,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             #region INDICATOR CALCULATIONS
 
-            Supertrend st = Supertrend(2, 10);
+            Supertrend st = Supertrend(2, 11);
             bool superUp = st.Value[0] < Low[0] ? true : false;
 
             FisherTransform ft = FisherTransform(10);
