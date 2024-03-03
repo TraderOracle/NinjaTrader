@@ -187,9 +187,6 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool sqzOff = (bbb < kcb) && (bbt > kct);
             bool noSqz = (sqzOn == false) && (sqzOff == false);
 
-            if (noSqz)
-            DrawText("0", Brushes.Yellow);
-
             double h = High[HighestBar(High, 20)];
             double l = Low[LowestBar(Low, 20)];
 
