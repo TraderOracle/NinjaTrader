@@ -55,10 +55,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         List<lines> ll = new List<lines>();
 
-        private double cdHigh = 1;
-        private double cdLow = 1;
-        private double cdOpen = 1;
-        private double cdClose = 1;
+        private bool sqRelaxUp = false;
 
         private SMA EMAS;
         private SMA EMAF;
@@ -76,9 +73,6 @@ namespace NinjaTrader.NinjaScript.Indicators
         private Series<double> MacdPsarSell;
         private Series<double> VolImbanceSell;
 
-        private bool bNewsProcessed = false;
-        private List<string> lsH = new List<string>();
-        private List<string> lsM = new List<string>();
         private bool bBigArrowUp = false;
         private string PrevEvil = string.Empty;
 
@@ -193,6 +187,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool sqzOff = (bbb < kcb) && (bbt > kct);
             bool noSqz = (sqzOn == false) && (sqzOff == false);
 
+            if (noSqz)
+            DrawText("0", Brushes.Yellow);
+
             double h = High[HighestBar(High, 20)];
             double l = Low[LowestBar(Low, 20)];
 
@@ -205,23 +202,21 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool sqeezeUp = false;
             if (SqueezeDef[0] > 0)
             {
-                //DrawText("SQ1", Brushes.Yellow);
                 sqeezeUp = true;
-                //if (SqueezeDef[0] < SqueezeDef[1])
-                //    DrawText("SQ1", Brushes.Yellow);
+                if (SqueezeDef[0] < SqueezeDef[1] && !sqRelaxUp && bShowSqueeze)
+                {
+                    DrawText("✦", Brushes.Yellow, false, true);
+                    sqRelaxUp = true;
+                }
             }
             else
             {
-                //DrawText("SQ2", Brushes.Yellow);
-                // if (SqueezeDef[0] < SqueezeDef[1])
-                //      DrawText("SQ2", Brushes.Yellow);
-                //  else 
-                //     DrawText("SQ3", Brushes.Yellow);
+                if (SqueezeDef[0] > SqueezeDef[1] && sqRelaxUp && bShowSqueeze)
+                {
+                    DrawText("✦", Brushes.Yellow, false, true);
+                    sqRelaxUp = false;
+                }
             }
-
-            //if (SqueezeDef > 0 && pSqueezeDef < 0)
-            //DrawText(SqueezeDef[0].ToString(), Brushes.Yellow);
-            //Print(SqueezeDef[0]);
 
             // Linda MACD
             double lindaMD = 0;
@@ -532,7 +527,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                 loc = High[zero] + (TickSize * 7);
 
             brFinal = loc == High[zero] + (TickSize * 7) ? Red_Brush :Green_Brush;
-            if (strX.Contains("▼") || strX.Contains("▲"))
+            if (strX.Contains("▼") || strX.Contains("▲") || strX.Contains("✦"))
                 brFinal = br;
 
             Draw.Text(this, "D" + bar, strX, zero, loc, brFinal);
