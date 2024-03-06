@@ -71,10 +71,12 @@ namespace NinjaTrader.NinjaScript.Indicators
         private Series<double> StandardBuy;
         private Series<double> MacdPsarBuy;
         private Series<double> VolImbanceBuy;
+        private Series<double> equalHigh;
 
         private Series<double> StandardSell;
         private Series<double> MacdPsarSell;
         private Series<double> VolImbanceSell;
+        private Series<double> equalLow;
 
         private bool bBigArrowUp = false;
         private bool bDefibCalculated = false;
@@ -140,7 +142,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 AddPlot(Brushes.Transparent, "StandardSell");
                 AddPlot(Brushes.Transparent, "MacdPsarSell");
                 AddPlot(Brushes.Transparent, "VolImbanceSell");
-
+                AddPlot(Brushes.Transparent, "equalHigh");
+                AddPlot(Brushes.Transparent, "equalLow");
             }
             else if (State == State.Configure)
             {
@@ -153,10 +156,12 @@ namespace NinjaTrader.NinjaScript.Indicators
                 StandardBuy = new Series<double>(this);
                 MacdPsarBuy = new Series<double>(this);
                 VolImbanceBuy = new Series<double>(this);
+                equalHigh = new Series<double>(this);
 
                 StandardSell = new Series<double>(this);
                 MacdPsarSell = new Series<double>(this);
                 VolImbanceSell = new Series<double>(this);
+                equalLow = new Series<double>(this);
             }
             else if (State == State.DataLoaded)
             {
@@ -409,10 +414,18 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if ((Close[0] > Close[1] && Close[1] > Close[2] && Close[2] > Close[3]) ||
                     (Close[0] < Close[1] && Close[1] < Close[2] && Close[2] < Close[3]))
                         DrawText("Stairs", Brushes.Yellow);
+
                 if (eqHigh)
+                {
                     DrawText("Eq Hi", Brushes.Yellow, false, true);
+                    equalHigh[0] = High[0];
+                }
+
                 if (eqLow)
+                {
                     DrawText("Eq Low", Brushes.Yellow, false, true);
+                    equalLow[0] = Low[0];
+                }
             }
 
             if (bShowRevPattern)
