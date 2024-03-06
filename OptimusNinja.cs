@@ -552,7 +552,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             if (strX.Contains("▾") || strX.Contains("▴") || strX.Contains("✦"))
             {
                 brFinal = br;
-                iTextSize = iDotSize;
+                sf.Size = iDotSize;
                 backGround = Brushes.Transparent;
             }
             if (strX.Contains("Eq") || strX.Contains("3o"))
@@ -564,7 +564,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                 br = Brushes.White;
                 iOffsetMe = 150;
             }
-
 
             //Draw.Text(this, "D" + bar, strX, zero, loc, brFinal);
             Draw.Text(this, "D" + bar, true, strX, zero, loc, iOffsetMe, br, sf, 
