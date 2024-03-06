@@ -466,7 +466,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 string evil = EvilTimes(Bars.GetTime(0));
                 if (evil != "" && evil != PrevEvil)
                 {
-                    Draw.TextFixed(this, "ET" + CurrentBar, evil, TextPosition.BottomRight);
+                    DrawText(evil, Red_Brush, false, true);
+                    //Draw.TextFixed(this, "ET" + CurrentBar, evil, TextPosition.BottomRight);
                     PrevEvil = evil;
                 }
             }
@@ -479,29 +480,38 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private String EvilTimes(DateTime time)
         {
-            if (time.Hour == 9 && time.Minute >= 00 && time.Minute <= 59)
-                return "Market Pivot (9 - 10am CST)";
+            int curr = ToTime(Time[0]);
+            int pivotStart = ToTime(9, 00, 00);
+            int pivotEnd = ToTime(10, 00, 00);
+            int euroMove = ToTime(10, 30, 00);
+            int inverse1 = ToTime(11, 00, 00);
+            int inverse2 = ToTime(12, 00, 00);
 
-            if (time.Hour == 10 && time.Minute >= 00 && time.Minute <= 29)
-                return "Euro Move (10 - 10:30am CST)";
+            int auctions = ToTime(13, 30, 00);
+            int inject = ToTime(14, 30, 00);
+            int rug = ToTime(14, 45, 00);
+            int finale = ToTime(15, 00, 00);
 
-            if (time.Hour == 10 && time.Minute >= 30 && time.Minute <= 59)
-                return "Inverse (10:30 - 11am CST)";
+            if (curr >= pivotStart && curr <= pivotEnd)
+                return "Market Pivot \n(9 - 10am CST)";
 
-            if (time.Hour == 11 && time.Minute >= 00 && time.Minute <= 59)
-                return "Inverse (11am - 12pm CST)";
+            if (curr >= pivotEnd && curr <= euroMove)
+                return "Euro Move \n(10 - 10:30am CST)";
 
-            if (time.Hour == 12 && time.Minute >= 00 && time.Minute <= 59)
-                return "Bond Auctions (12pm - 1:30pm CST)";
+            if (curr >= euroMove && curr <= inverse1)
+                return "Inverse\n(10:30 - 11am CST)";
 
-            if (time.Hour == 13 && time.Minute >= 29 && time.Minute <= 59)
-                return "Capital Injection (1:30pm - 2:30pm CST)";
+            if (curr >= inverse1 && curr <= inverse2)
+                return "Inverse \n(11am - 12pm CST)";
 
-            if (time.Hour == 14 && time.Minute >= 29 && time.Minute <= 59)
-                return "Capital Injection (2:30pm - 2:45pm CST)";
+            if (curr >= inverse2 && curr <= auctions)
+                return "Bond Auctions \n(12pm - 1:30pm CST)";
 
-            if (time.Hour == 14 && time.Minute >= 49 && time.Minute <= 59)
-                return "Rug Pull (2:45pm - 3pm CST)";
+            if (curr >= auctions && curr <= rug)
+                return "Capital Injection \n(1:30pm - 2:45pm CST)";
+
+            if (curr >= rug && curr <= finale)
+                return "Rug Pull \n(2:45pm - 3pm CST)";
 
             return "";
         }
@@ -512,7 +522,12 @@ namespace NinjaTrader.NinjaScript.Indicators
             double loc = 0;
             int bar = CurrentBar;
             int zero = 0;
+            int iOffsetMe = 0;
             SolidColorBrush backGround = Brushes.Transparent;
+
+            SimpleFont sf = new SimpleFont();
+            sf.Bold = false;
+            sf.Size = iTextSize;
 
             if (strX.Contains("Eq"))
             {
@@ -541,13 +556,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                 backGround = brFinal == Red_Brush ? Brushes.Red : Brushes.Lime;
             if (strX.Contains("TR"))
                 backGround = Brushes.PowderBlue;
+            if (strX.Contains("CST"))
+            {
+                br = Brushes.White;
+                iOffsetMe = 150;
+            }
 
-            SimpleFont sf = new SimpleFont();
-            sf.Bold = false;
-            sf.Size = iTextSize;
 
             //Draw.Text(this, "D" + bar, strX, zero, loc, brFinal);
-            Draw.Text(this, "D" + bar, true, strX, zero, loc, 0, br, sf, 
+            Draw.Text(this, "D" + bar, true, strX, zero, loc, iOffsetMe, br, sf, 
                 TextAlignment.Center, Brushes.Transparent, backGround, 40);
         }
 
