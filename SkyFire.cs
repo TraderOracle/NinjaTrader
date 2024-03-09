@@ -27,6 +27,8 @@ using System.Net.Mail;
 using System.Reflection.Emit;
 using System.Diagnostics;
 using System.Runtime.Remoting.Contexts;
+using System.Runtime.InteropServices;
+using System.Windows.Forms;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Strategies
@@ -41,8 +43,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         private DateTime dtStart = DateTime.Now;
         private String sLastTrade = String.Empty;
 
-        private SMA EMAS;
-        private SMA EMAF;
+        private SMA SMAS;
+        private SMA SMAF;
         private Series<double> MACD1;
         private Series<double> LMACD;
         private Series<double> sqzData;
@@ -123,7 +125,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (State != State.Realtime || CurrentBars[0] < 2)
                 return;
 
-            if (Bars.IsFirstBarOfSession && IsFirstTickOfBar)
+            if (Bars.IsFirstBarOfSession)
             {
                 iOpenPositions = 0;
                 cumPnL = totalPnL;
@@ -142,7 +144,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 string xy = EnterNewTrade();
 
                 if (xy.Contains("+1")
-                    //&& (Position.MarketPosition == MarketPosition.Flat)
+                    && (Position.MarketPosition != MarketPosition.Short)
                     && (dailyPnL > -DailyLossLimit)
                     && (dailyPnL < DailyProfitLimit)
                     )
@@ -159,7 +161,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
 
                 if (xy.Contains("-1")
-                    //&& (Position.MarketPosition == MarketPosition.Flat)
+                    && (Position.MarketPosition != MarketPosition.Long)
                     && (dailyPnL > -DailyLossLimit)
                     && (dailyPnL < DailyProfitLimit)
                     )
@@ -175,10 +177,6 @@ namespace NinjaTrader.NinjaScript.Strategies
                     sLastTrade = xy + " at " + Position.AveragePrice;
                 }
 
-                if (Position.MarketPosition == MarketPosition.Short)
-                {
-
-                }
             }
 
         }
@@ -216,13 +214,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 BarsRequiredToTrade = 1;
                 IsInstantiatedOnEachOptimizationIteration = true;
 
-                #endregion
-
-                //Daily Limits
-                DailyProfitLimit = 1000;
-                DailyLossLimit = 500;
-
-                //Position Size
+                DailyProfitLimit = 5000;
+                DailyLossLimit = 5000;
                 PositionSize = 1;
                 iMaxContracts = 5;
 
@@ -237,8 +230,12 @@ namespace NinjaTrader.NinjaScript.Strategies
                 bUseAO = false;
                 bUseHMA = false;
                 iWaddahIntense = 150;
+                bExitHammer = false;
+                bExitSqueeze = false;
+                bExitKama9 = false;
                 myVersion = "(c) 2024 by TraderOracle, version " + sVersion;
 
+                #endregion
             }
             else if (State == State.Configure)
             {
@@ -250,8 +247,8 @@ namespace NinjaTrader.NinjaScript.Strategies
             }
             else if (State == State.DataLoaded)
             {
-                EMAF = SMA(3);
-                EMAS = SMA(10);
+                SMAF = SMA(3);
+                SMAS = SMA(10);
             }
         }
 
@@ -289,13 +286,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 sqeezeUp = true;
 
             // Linda MACD
-            double lindaMD = 0;
-            MACD1[0] = EMAF[0] - EMAS[0];
-            lindaMD = MACD1[0] - SMA(MACD1, 16)[0];
-            bool macdUp = lindaMD > 0;
-
-            //Print("Linda = " + lindaMD.ToString());
-            //DrawText(lindaMD.ToString(), Brushes.White);
+            MACD1[0] = SMAF[0] - SMAS[0];
+            bool macdUp = MACD1[0] - SMA(MACD1, 16)[0] > 0;
 
             double Trend1, Trend2, Explo1, Explo2, Dead;
             Trend1 = (MACD(20, 40, 9)[0] - MACD(20, 40, 9)[1]) * iWaddahIntense;
@@ -311,8 +303,6 @@ namespace NinjaTrader.NinjaScript.Strategies
             FisherTransform ft = FisherTransform(10);
             bool fisherUp = ft.Value[0] > ft.Value[1] ? true : false;
 
-            //WaddahAttarExplosion wae = WaddahAttarExplosion(150, 30, 15, 1, false, 1, false, false, false, false);
-
             ParabolicSAR sar = ParabolicSAR(0.02, 0.2, 0.02);
             bool psarUp = sar.Value[0] < Low[0] ? true : false;
 
@@ -327,7 +317,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             bool t3Up = Close[0] > t3.Value[0];
 
             ADX x = ADX(10);
-            KAMA kama = KAMA(2, 9, 109);
+            KAMA kama9 = KAMA(2, 9, 109);
             RSI rsi = RSI(14, 1);
 
             #endregion
@@ -366,6 +356,33 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             #endregion
 
+
+            #region EXIT POSITIONS
+
+            if (Position.MarketPosition == MarketPosition.Long)
+            {
+                if (red && Close[0] < kama9.Value[0] && bExitKama9)
+                {
+                    ExitLong("MyEntryLong");
+                    Print("Exit = Priced crossed KAMA9");
+                    sLastTrade = "Exit = Priced crossed KAMA9";
+                    iOpenPositions = 0;
+                }
+            }
+
+            if (Position.MarketPosition == MarketPosition.Short)
+            {
+                if (green && Close[0] > kama9.Value[0] && bExitKama9)
+                {
+                    ExitShort("MyEntryShort");
+                    Print("Exit = Priced crossed KAMA9");
+                    sLastTrade = "Exit = Priced crossed KAMA9";
+                    iOpenPositions = 0;
+                }
+            }
+
+            #endregion
+
             #region DISPLAY BUY / SELL
 
             // VOLUME IMBALANCE
@@ -391,15 +408,16 @@ namespace NinjaTrader.NinjaScript.Strategies
             if (red && bShowDown)
                 return "-1 Standard Sell";
 
-            return "0000";
-
             #endregion
+
+            return "0000";
         }
+
 
         protected override void OnPositionUpdate(Cbi.Position position, double averagePrice, int quantity, Cbi.MarketPosition marketPosition)
         {
             SimpleFont sf = new SimpleFont();
-            totalPnL = SystemPerformance.RealTimeTrades.TradesPerformance.Currency.CumProfit; ///Double that sets the total PnL 
+            totalPnL = SystemPerformance.RealTimeTrades.TradesPerformance.Currency.CumProfit;
 
             var txt = $"SkyFire version " + sVersion;
             TimeSpan t = TimeSpan.FromMilliseconds(clock.ElapsedMilliseconds);
@@ -431,35 +449,47 @@ namespace NinjaTrader.NinjaScript.Strategies
 
         [NinjaScriptProperty]
         [Range(1, int.MaxValue)]
-        [Display(Name = "Position Size", Order = 1, GroupName = "General")]
+        [Display(Name = "Position Size", GroupName = "General", Order = 0)]
         public int PositionSize
         { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Waddah Intensity", GroupName = "General", Order = 2)]
+        [Display(Name = "Waddah Intensity", GroupName = "General", Order = 1)]
         public int iWaddahIntense { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Indicator Version", GroupName = "General", Order = 15)]
+        [Display(Name = "Indicator Version", GroupName = "General", Order = 2)]
         public string myVersion { get; set; }
 
         // =======================================================================================
 
         [NinjaScriptProperty]
-        [Display(Name = "Daily Profit Limit", Order = 0, GroupName = "Limits")]
+        [Display(Name = "Daily Profit Limit", GroupName = "Limits", Order = 0)]
         public double DailyProfitLimit
         { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Daily Loss Limit", Order = 1, GroupName = "Limits")]
+        [Display(Name = "Daily Loss Limit", GroupName = "Limits", Order = 1)]
         public double DailyLossLimit
         { get; set; }
 
         [NinjaScriptProperty]
         [Range(1, int.MaxValue)]
-        [Display(Name = "Max Contracts to Open", Description = "How Many Trades System will Enter", Order = 4, GroupName = "Limits")]
+        [Display(Name = "Max Contracts to Open", GroupName = "Limits", Order = 2)]
         public int iMaxContracts
         { get; set; }
+
+        //===========================================================================================
+
+        [NinjaScriptProperty]
+        [Display(Name = "KAMA 9 cros", GroupName = "Exit Conditions", Order = 0)]
+        public bool bExitKama9 { get; set; }
+        [NinjaScriptProperty]
+        [Display(Name = "Hammer candle", GroupName = "Exit Conditions", Order = 1)]
+        public bool bExitHammer { get; set; }
+        [NinjaScriptProperty]
+        [Display(Name = "Squeeze relaxer", GroupName = "Exit Conditions", Order = 2)]
+        public bool bExitSqueeze { get; set; }
 
         //===========================================================================================
 
