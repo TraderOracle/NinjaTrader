@@ -362,7 +362,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (Position.MarketPosition == MarketPosition.Long)
             {
-                if (red && Close[0] < kama9.Value[0] && bExitKama9)
+                if (red && Close[0] < kama9.Value[0] && Open[0] < kama9.Value[0] && bExitKama9)
                 {
                     ExitLong("MyEntryLong");
                     Print("Exit = Priced crossed KAMA9");
@@ -376,11 +376,18 @@ namespace NinjaTrader.NinjaScript.Strategies
                     sLastTrade = "Exit = Waddah Reversed";
                     iOpenPositions = 0;
                 }
+                if (!psarUp)
+                {
+                    ExitLong("MyEntryLong");
+                    Print("Exit = PSAR Reversed");
+                    sLastTrade = "Exit = PSAR Reversed";
+                    iOpenPositions = 0;
+                }
             }
 
             if (Position.MarketPosition == MarketPosition.Short)
             {
-                if (green && Close[0] > kama9.Value[0] && bExitKama9)
+                if (green && Close[0] > kama9.Value[0] && Open[0] > kama9.Value[0] && bExitKama9)
                 {
                     ExitShort("MyEntryShort");
                     Print("Exit = Priced crossed KAMA9");
@@ -392,6 +399,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                     ExitLong("MyEntryLong");
                     Print("Exit = Waddah Reversed");
                     sLastTrade = "Exit = Waddah Reversed";
+                    iOpenPositions = 0;
+                }
+                if (psarUp)
+                {
+                    ExitLong("MyEntryLong");
+                    Print("Exit = PSAR Reversed");
+                    sLastTrade = "Exit = PSAR Reversed";
                     iOpenPositions = 0;
                 }
             }
