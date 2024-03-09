@@ -230,9 +230,10 @@ namespace NinjaTrader.NinjaScript.Strategies
                 bUseAO = false;
                 bUseHMA = false;
                 iWaddahIntense = 150;
-                bExitHammer = false;
+                bExitWaddah = false;
                 bExitSqueeze = false;
                 bExitKama9 = false;
+                bVolImbalance = false;
                 myVersion = "(c) 2024 by TraderOracle, version " + sVersion;
 
                 #endregion
@@ -368,6 +369,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                     sLastTrade = "Exit = Priced crossed KAMA9";
                     iOpenPositions = 0;
                 }
+                if (!wadaUp && bExitWaddah)
+                {
+                    ExitLong("MyEntryLong");
+                    Print("Exit = Waddah Reversed");
+                    sLastTrade = "Exit = Waddah Reversed";
+                    iOpenPositions = 0;
+                }
             }
 
             if (Position.MarketPosition == MarketPosition.Short)
@@ -379,6 +387,13 @@ namespace NinjaTrader.NinjaScript.Strategies
                     sLastTrade = "Exit = Priced crossed KAMA9";
                     iOpenPositions = 0;
                 }
+                if (wadaUp && bExitWaddah)
+                {
+                    ExitLong("MyEntryLong");
+                    Print("Exit = Waddah Reversed");
+                    sLastTrade = "Exit = Waddah Reversed";
+                    iOpenPositions = 0;
+                }
             }
 
             #endregion
@@ -386,10 +401,10 @@ namespace NinjaTrader.NinjaScript.Strategies
             #region DISPLAY BUY / SELL
 
             // VOLUME IMBALANCE
-            if (green && c1G && Open[0] > Close[1])
+            if (green && c1G && Open[0] > Close[1] && bVolImbalance)
                 return "+1 Volume Imbalance";
 
-            if (red && c1R && Open[0] < Close[1])
+            if (red && c1R && Open[0] < Close[1] && bVolImbalance)
                 return "-1 Volume Imbalance";
 
             // ========================    UP CONDITIONS    ===========================
@@ -485,13 +500,17 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "KAMA 9 cros", GroupName = "Exit Conditions", Order = 0)]
         public bool bExitKama9 { get; set; }
         [NinjaScriptProperty]
-        [Display(Name = "Hammer candle", GroupName = "Exit Conditions", Order = 1)]
-        public bool bExitHammer { get; set; }
+        [Display(Name = "Waddah reversal", GroupName = "Exit Conditions", Order = 1)]
+        public bool bExitWaddah { get; set; }
         [NinjaScriptProperty]
         [Display(Name = "Squeeze relaxer", GroupName = "Exit Conditions", Order = 2)]
         public bool bExitSqueeze { get; set; }
 
         //===========================================================================================
+
+        [NinjaScriptProperty]
+        [Display(Name = "Trade All Volume Imbalances", GroupName = "Buy/Sell Filters", Order = 0)]
+        public bool bVolImbalance { get; set; }
 
         [NinjaScriptProperty]
         [Display(Name = "Waddah Explosion", GroupName = "Buy/Sell Filters", Order = 1)]
