@@ -231,8 +231,8 @@ namespace NinjaTrader.NinjaScript.Strategies
                 bUseHMA = false;
                 iWaddahIntense = 150;
                 bExitWaddah = false;
-                bExitSqueeze = false;
                 bExitKama9 = false;
+                bExitPSAR = false;
                 bVolImbalance = false;
                 myVersion = "(c) 2024 by TraderOracle, version " + sVersion;
 
@@ -362,7 +362,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (Position.MarketPosition == MarketPosition.Long)
             {
-                if (red && Close[0] < kama9.Value[0] && Open[0] < kama9.Value[0] && bExitKama9)
+                if (red && Close[0] < kama9.Value[0] && bExitKama9)
                 {
                     ExitLong("MyEntryLong");
                     Print("Exit = Priced crossed KAMA9");
@@ -376,7 +376,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     sLastTrade = "Exit = Waddah Reversed";
                     iOpenPositions = 0;
                 }
-                if (!psarUp)
+                if (!psarUp && bExitPSAR)
                 {
                     ExitLong("MyEntryLong");
                     Print("Exit = PSAR Reversed");
@@ -387,7 +387,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             if (Position.MarketPosition == MarketPosition.Short)
             {
-                if (green && Close[0] > kama9.Value[0] && Open[0] > kama9.Value[0] && bExitKama9)
+                if (green && Close[0] > kama9.Value[0] && bExitKama9)
                 {
                     ExitShort("MyEntryShort");
                     Print("Exit = Priced crossed KAMA9");
@@ -401,7 +401,7 @@ namespace NinjaTrader.NinjaScript.Strategies
                     sLastTrade = "Exit = Waddah Reversed";
                     iOpenPositions = 0;
                 }
-                if (psarUp)
+                if (psarUp && bExitPSAR)
                 {
                     ExitLong("MyEntryLong");
                     Print("Exit = PSAR Reversed");
@@ -517,8 +517,8 @@ namespace NinjaTrader.NinjaScript.Strategies
         [Display(Name = "Waddah reversal", GroupName = "Exit Conditions", Order = 1)]
         public bool bExitWaddah { get; set; }
         [NinjaScriptProperty]
-        [Display(Name = "Squeeze relaxer", GroupName = "Exit Conditions", Order = 2)]
-        public bool bExitSqueeze { get; set; }
+        [Display(Name = "Parabolic SAR reversal", GroupName = "Exit Conditions", Order = 2)]
+        public bool bExitPSAR { get; set; }
 
         //===========================================================================================
 
