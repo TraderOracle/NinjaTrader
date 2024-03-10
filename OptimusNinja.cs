@@ -35,6 +35,7 @@ using NinjaTrader.NinjaScript.MarketAnalyzerColumns;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.ToolTip;
 using NinjaTrader.Adapter;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
+using System.Windows.Forms;
 
 #endregion
 
@@ -46,7 +47,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
     public class Optimus : Indicator
     {
-        private string sVersion = "1.19";
+        private string sVersion = "1.22";
 
         #region VARIABLES
 
@@ -60,27 +61,20 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private bool sqRelaxUp = false;
 
-        private SMA EMAS;
-        private SMA EMAF;
-        private Series<double> MACD1;
-        private Series<double> LMACD;
-        private Series<double> sqzData;
-        private Series<double> SqueezeDef;
-        private Series<double> AO;
-
-        private Series<double> StandardBuy;
-        private Series<double> MacdPsarBuy;
-        private Series<double> VolImbanceBuy;
-        private Series<double> equalHigh;
-
-        private Series<double> StandardSell;
-        private Series<double> MacdPsarSell;
-        private Series<double> VolImbanceSell;
-        private Series<double> equalLow;
+        private SMA EMAS, EMAF;
+        private Series<double> MACD1, sqzData, SqueezeDef, AO, atrSeries, bottomSeries, topSeries;
 
         private bool bBigArrowUp = false;
         private bool bDefibCalculated = false;
         private string PrevEvil = string.Empty;
+
+        private double barHighValue, barLowValue, bottomValue, topValue;
+        private int ATRMultiplier = 2;
+        private int ATRPeriod = 11;
+
+        private string sndBuy = NinjaTrader.Core.Globals.InstallDir + @"\sounds\Buy.wav";
+        private string sndSell = NinjaTrader.Core.Globals.InstallDir + @"\sounds\Sell.wav";
+        private string sndImb = NinjaTrader.Core.Globals.InstallDir + @"\sounds\Imbalance.wav";
 
         #endregion
 
@@ -135,38 +129,21 @@ namespace NinjaTrader.NinjaScript.Indicators
                 bSendEmail = false;
                 bShowEvilTimes = false;
                 myVersion = "(c) 2024 by TraderOracle, version " + sVersion;
-
-                AddPlot(Brushes.Transparent, "StandardBuy");
-                AddPlot(Brushes.Transparent, "MacdPsarBuy");
-                AddPlot(Brushes.Transparent, "VolImbanceBuy");
-                AddPlot(Brushes.Transparent, "StandardSell");
-                AddPlot(Brushes.Transparent, "MacdPsarSell");
-                AddPlot(Brushes.Transparent, "VolImbanceSell");
-                AddPlot(Brushes.Transparent, "equalHigh");
-                AddPlot(Brushes.Transparent, "equalLow");
             }
             else if (State == State.Configure)
             {
                 MACD1 = new Series<double>(this);
-                LMACD = new Series<double>(this);
                 sqzData = new Series<double>(this);
                 SqueezeDef = new Series<double>(this);
                 AO = new Series<double>(this);
-
-                StandardBuy = new Series<double>(this);
-                MacdPsarBuy = new Series<double>(this);
-                VolImbanceBuy = new Series<double>(this);
-                equalHigh = new Series<double>(this);
-
-                StandardSell = new Series<double>(this);
-                MacdPsarSell = new Series<double>(this);
-                VolImbanceSell = new Series<double>(this);
-                equalLow = new Series<double>(this);
             }
             else if (State == State.DataLoaded)
             {
                 EMAF = SMA(3);
                 EMAS = SMA(10);
+                topSeries = new Series<double>(this, MaximumBarsLookBack.TwoHundredFiftySix);
+                bottomSeries = new Series<double>(this, MaximumBarsLookBack.TwoHundredFiftySix);
+                atrSeries = new Series<double>(this, MaximumBarsLookBack.TwoHundredFiftySix);
             }
         }
 
@@ -190,6 +167,31 @@ namespace NinjaTrader.NinjaScript.Indicators
             //    Defibillator();
 
             #region INDICATOR CALCULATIONS
+
+            // SUPER TREND
+            if (IsFirstTickOfBar)
+            {
+                barHighValue = double.MinValue;
+                barLowValue = double.MaxValue;
+            }
+
+            barHighValue = High[0];
+            barLowValue = Low[0];
+
+            if (CurrentBar == 0)
+                atrSeries[0] = High[0] - Low[0];
+            else
+            {
+                double close1 = Input is PriceSeries ? Close[1] : Input[1];
+                double trueRange = Math.Max(Math.Abs(barLowValue - close1), Math.Max(barHighValue - barLowValue, Math.Abs(barHighValue - close1)));
+                atrSeries[0] = ((Math.Min(CurrentBar + 1, ATRPeriod) - 1) * atrSeries[1] + trueRange) / Math.Min(CurrentBar + 1, ATRPeriod);
+            }
+
+            topValue = ((barHighValue + barLowValue) / 2) + (ATRMultiplier * atrSeries[0]);
+            bottomValue = ((barHighValue + barLowValue) / 2) - (ATRMultiplier * atrSeries[0]);
+            topSeries[0] = (topValue < Default[1] || Input[1] > Default[1]) ? topValue : Default[1];
+            bottomSeries[0] = (bottomValue > Default[1] || Input[1] < Default[1]) ? bottomValue : Default[1];
+            Default[0] = (Default[1] == topSeries[1]) ? ((Input[0] <= topSeries[0]) ? topSeries[0] : bottomSeries[0]) : ((Default[1] == bottomSeries[1]) ? ((Input[0] >= bottomSeries[0]) ? bottomSeries[0] : topSeries[0]) : topSeries[0]);
 
             // Awesome Oscillator
             bool bAOGreen = false;
@@ -258,8 +260,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             var waddah = Math.Min(Math.Abs(Trend1) + iWaddahBuffer, 255);
             var cCoLorWaddah = Trend1 >= 0 ? Color.FromArgb(255, 0, (byte)waddah, 0) : Color.FromArgb(255, (byte)waddah, 0, 0);
 
-            Supertrend st = Supertrend(2, 11);
-            bool superUp = st.Value[0] < Low[0] ? true : false;
+            //Supertrend st = Supertrend(2, 11);
+            //bool superUp = st.Value[0] < Low[0] ? true : false;
+            bool superUp = Default[0] < Low[0] ? true : false;
 
             FisherTransform ft = FisherTransform(10);
             bool fisherUp = ft.Value[0] > ft.Value[1] ? true : false;
@@ -354,10 +357,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     lines li = new lines() { loc = Open[0], tag = CurrentBar.ToString() };
                     ll.Add(li);
                     if (bPlaySounds)
-                        PlaySound(NinjaTrader.Core.Globals.InstallDir + @"\sounds\Imbalance.wav");
+                        Alert("Alert", Priority.Medium, "Volume Imbalance BUY", sndImb, 10, Brushes.Black, Brushes.BlanchedAlmond);
                     if (bSendEmail)
                         SendMail(sEmailAddress, "Volume Imbalance BUY", "Volume Imbalance BUY " + Instrument + " " + Close[0].ToString());
-                    VolImbanceBuy[0] = Close[0];
                     //Draw.Line(this, tag, true, DateTime.Today.AddDays(-0.4), Open[0], DateTime.Now, Open[0], Brushes.MediumPurple, DashStyleHelper.Dash, 1);
                 }
                 if (red && c1R && Open[0] < Close[1])
@@ -367,10 +369,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     lines li = new lines() { loc = Open[0], tag = CurrentBar.ToString() };
                     ll.Add(li);
                     if (bPlaySounds)
-                        PlaySound(NinjaTrader.Core.Globals.InstallDir + @"\sounds\Imbalance.wav");
+                        Alert("Alert", Priority.Medium, "Volume Imbalance SELL", sndImb, 10, Brushes.Black, Brushes.BlanchedAlmond);
                     if (bSendEmail)
                         SendMail(sEmailAddress, "Volume Imbalance SELL", "Volume Imbalance SELL " + Instrument + " " + Close[0].ToString());
-                    VolImbanceSell[0] = Close[0];
                 }
             }
 
@@ -387,10 +388,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 DrawText("▴", Green_Brush, false, true);
                 if (bPlaySounds)
-                    PlaySound(Core.Globals.InstallDir + @"\sounds\Buy.wav");
+                    Alert("Alert", Priority.Medium, "Standard BUY", sndBuy, 10, Brushes.Black, Brushes.BlanchedAlmond);
                 if (bSendEmail)
                     SendMail(sEmailAddress, "Standard BUY", "Standard BUY " + Instrument + " " + Close[0].ToString());
-                StandardBuy[0] = Close[0];
             }
 
             // ========================    DOWN CONDITIONS    =========================
@@ -402,10 +402,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 DrawText("▾", Red_Brush, false, true);
                 if (bPlaySounds)
-                    PlaySound(Core.Globals.InstallDir + @"\sounds\Sell.wav");
+                    Alert("Alert", Priority.Medium, "Standard SELL", sndSell, 10, Brushes.Black, Brushes.BlanchedAlmond);
                 if (bSendEmail)
                     SendMail(sEmailAddress, "Standard SELL", "Standard SELL " + Instrument + " " + Close[0].ToString());
-                StandardSell[0] = Close[0];
             }
 
             if (bShowAdvanced)
@@ -418,13 +417,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (eqHigh)
                 {
                     DrawText("Eq Hi", Brushes.Yellow, false, true);
-                    equalHigh[0] = High[0];
                 }
 
                 if (eqLow)
                 {
                     DrawText("Eq Low", Brushes.Yellow, false, true);
-                    equalLow[0] = Low[0];
                 }
             }
 
@@ -459,7 +456,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                     PlaySound(Core.Globals.InstallDir + @"\sounds\Buy.wav");
                 if (bSendEmail)
                     SendMail(sEmailAddress, "MACD/PSAR BUY", "MACD/PSAR BUY " + Instrument + " " + Close[0].ToString());
-                MacdPsarBuy[0] = Close[0];
             }
 
             if (Trend1 < 0 && Math.Abs(Trend1) > Explo1 && !psarUp && bBigArrowUp && bShowMACDPSARArrow)
@@ -470,7 +466,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                     PlaySound(Core.Globals.InstallDir + @"\sounds\Sell.wav");
                 if (bSendEmail)
                     SendMail(sEmailAddress, "MACD/PSAR SELL", "MACD/PSAR SELL " + Instrument + " " + Close[0].ToString());
-                MacdPsarSell[0] = Close[0];
             }
 
             #endregion
@@ -778,6 +773,12 @@ namespace NinjaTrader.NinjaScript.Indicators
         public Brush Red_Brush
         { get; set; }
 
+        [XmlIgnore]
+        [Browsable(false)]
+        public Series<double> Default
+        {
+            get { return Values[0]; }
+        }
 
         #endregion
     }
