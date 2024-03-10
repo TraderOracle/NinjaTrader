@@ -47,7 +47,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
     public class Optimus : Indicator
     {
-        private string sVersion = "1.22";
+        private string sVersion = "1.23";
 
         #region VARIABLES
 
@@ -167,7 +167,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             //    Defibillator();
 
             #region INDICATOR CALCULATIONS
-
+/*
             // SUPER TREND
             if (IsFirstTickOfBar)
             {
@@ -193,6 +193,7 @@ namespace NinjaTrader.NinjaScript.Indicators
             bottomSeries[0] = (bottomValue > Default[1] || Input[1] < Default[1]) ? bottomValue : Default[1];
             Default[0] = (Default[1] == topSeries[1]) ? ((Input[0] <= topSeries[0]) ? topSeries[0] : bottomSeries[0]) : ((Default[1] == bottomSeries[1]) ? ((Input[0] >= bottomSeries[0]) ? bottomSeries[0] : topSeries[0]) : topSeries[0]);
 
+*/
             // Awesome Oscillator
             bool bAOGreen = false;
             var ao = SMA(Median, 5)[0] - SMA(Median, 34)[0];
@@ -260,9 +261,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             var waddah = Math.Min(Math.Abs(Trend1) + iWaddahBuffer, 255);
             var cCoLorWaddah = Trend1 >= 0 ? Color.FromArgb(255, 0, (byte)waddah, 0) : Color.FromArgb(255, (byte)waddah, 0, 0);
 
-            //Supertrend st = Supertrend(2, 11);
-            //bool superUp = st.Value[0] < Low[0] ? true : false;
-            bool superUp = Default[0] < Low[0] ? true : false;
+            Supertrend st = Supertrend(2, 11);
+            bool superUp = st.Value[0] < Low[0] ? true : false;
+            //bool superUp = Default[0] < Low[0] ? true : false;
 
             FisherTransform ft = FisherTransform(10);
             bool fisherUp = ft.Value[0] > ft.Value[1] ? true : false;
