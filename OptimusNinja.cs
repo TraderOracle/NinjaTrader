@@ -35,6 +35,7 @@ using NinjaTrader.NinjaScript.MarketAnalyzerColumns;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.ToolTip;
 using NinjaTrader.Adapter;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
+using System.Windows.Forms;
 
 #endregion
 
@@ -46,7 +47,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
     public class Optimus : Indicator
     {
-        private string sVersion = "1.19";
+        private string sVersion = "1.24";
 
         #region VARIABLES
 
@@ -60,27 +61,20 @@ namespace NinjaTrader.NinjaScript.Indicators
 
         private bool sqRelaxUp = false;
 
-        private SMA EMAS;
-        private SMA EMAF;
-        private Series<double> MACD1;
-        private Series<double> LMACD;
-        private Series<double> sqzData;
-        private Series<double> SqueezeDef;
-        private Series<double> AO;
-
-        private Series<double> StandardBuy;
-        private Series<double> MacdPsarBuy;
-        private Series<double> VolImbanceBuy;
-        private Series<double> equalHigh;
-
-        private Series<double> StandardSell;
-        private Series<double> MacdPsarSell;
-        private Series<double> VolImbanceSell;
-        private Series<double> equalLow;
+        private SMA EMAS, EMAF;
+        private Series<double> kama9, MACD1, sqzData, SqueezeDef, AO, atrSeries, bottomSeries, topSeries;
 
         private bool bBigArrowUp = false;
         private bool bDefibCalculated = false;
         private string PrevEvil = string.Empty;
+
+        private double barHighValue, barLowValue, bottomValue, topValue;
+        private int ATRMultiplier = 2;
+        private int ATRPeriod = 11;
+
+        private string sndBuy = NinjaTrader.Core.Globals.InstallDir + @"\sounds\Buy.wav";
+        private string sndSell = NinjaTrader.Core.Globals.InstallDir + @"\sounds\Sell.wav";
+        private string sndImb = NinjaTrader.Core.Globals.InstallDir + @"\sounds\Imbalance.wav";
 
         #endregion
 
@@ -90,7 +84,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         {
             if (State == State.SetDefaults)
             {
-                Description = @"Displays Bar Count";
+                Description = @"Optimus Prime Indicator by TraderOracle";
                 Name = "OptimusNinja";
                 Calculate = Calculate.OnBarClose;
                 IsOverlay = true;
@@ -130,43 +124,30 @@ namespace NinjaTrader.NinjaScript.Indicators
                 bUseMACD = false;
                 bUseAO = false;
                 bUseHMA = false;
+                bShowKAMA9 = false;
 
                 bPlaySounds = false;
                 bSendEmail = false;
                 bShowEvilTimes = false;
                 myVersion = "(c) 2024 by TraderOracle, version " + sVersion;
 
-                AddPlot(Brushes.Transparent, "StandardBuy");
-                AddPlot(Brushes.Transparent, "MacdPsarBuy");
-                AddPlot(Brushes.Transparent, "VolImbanceBuy");
-                AddPlot(Brushes.Transparent, "StandardSell");
-                AddPlot(Brushes.Transparent, "MacdPsarSell");
-                AddPlot(Brushes.Transparent, "VolImbanceSell");
-                AddPlot(Brushes.Transparent, "equalHigh");
-                AddPlot(Brushes.Transparent, "equalLow");
+                AddPlot(Brushes.DarkOrange, "kama9");
             }
             else if (State == State.Configure)
             {
                 MACD1 = new Series<double>(this);
-                LMACD = new Series<double>(this);
                 sqzData = new Series<double>(this);
                 SqueezeDef = new Series<double>(this);
                 AO = new Series<double>(this);
-
-                StandardBuy = new Series<double>(this);
-                MacdPsarBuy = new Series<double>(this);
-                VolImbanceBuy = new Series<double>(this);
-                equalHigh = new Series<double>(this);
-
-                StandardSell = new Series<double>(this);
-                MacdPsarSell = new Series<double>(this);
-                VolImbanceSell = new Series<double>(this);
-                equalLow = new Series<double>(this);
+                kama9 = new Series<double>(this);
             }
             else if (State == State.DataLoaded)
             {
                 EMAF = SMA(3);
                 EMAS = SMA(10);
+                topSeries = new Series<double>(this, MaximumBarsLookBack.TwoHundredFiftySix);
+                bottomSeries = new Series<double>(this, MaximumBarsLookBack.TwoHundredFiftySix);
+                atrSeries = new Series<double>(this, MaximumBarsLookBack.TwoHundredFiftySix);
             }
         }
 
@@ -190,7 +171,33 @@ namespace NinjaTrader.NinjaScript.Indicators
             //    Defibillator();
 
             #region INDICATOR CALCULATIONS
+/*
+            // SUPER TREND
+            if (IsFirstTickOfBar)
+            {
+                barHighValue = double.MinValue;
+                barLowValue = double.MaxValue;
+            }
 
+            barHighValue = High[0];
+            barLowValue = Low[0];
+
+            if (CurrentBar == 0)
+                atrSeries[0] = High[0] - Low[0];
+            else
+            {
+                double close1 = Input is PriceSeries ? Close[1] : Input[1];
+                double trueRange = Math.Max(Math.Abs(barLowValue - close1), Math.Max(barHighValue - barLowValue, Math.Abs(barHighValue - close1)));
+                atrSeries[0] = ((Math.Min(CurrentBar + 1, ATRPeriod) - 1) * atrSeries[1] + trueRange) / Math.Min(CurrentBar + 1, ATRPeriod);
+            }
+
+            topValue = ((barHighValue + barLowValue) / 2) + (ATRMultiplier * atrSeries[0]);
+            bottomValue = ((barHighValue + barLowValue) / 2) - (ATRMultiplier * atrSeries[0]);
+            topSeries[0] = (topValue < Default[1] || Input[1] > Default[1]) ? topValue : Default[1];
+            bottomSeries[0] = (bottomValue > Default[1] || Input[1] < Default[1]) ? bottomValue : Default[1];
+            Default[0] = (Default[1] == topSeries[1]) ? ((Input[0] <= topSeries[0]) ? topSeries[0] : bottomSeries[0]) : ((Default[1] == bottomSeries[1]) ? ((Input[0] >= bottomSeries[0]) ? bottomSeries[0] : topSeries[0]) : topSeries[0]);
+
+*/
             // Awesome Oscillator
             bool bAOGreen = false;
             var ao = SMA(Median, 5)[0] - SMA(Median, 34)[0];
@@ -260,6 +267,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             Supertrend st = Supertrend(2, 11);
             bool superUp = st.Value[0] < Low[0] ? true : false;
+            //bool superUp = Default[0] < Low[0] ? true : false;
 
             FisherTransform ft = FisherTransform(10);
             bool fisherUp = ft.Value[0] > ft.Value[1] ? true : false;
@@ -280,7 +288,11 @@ namespace NinjaTrader.NinjaScript.Indicators
             bool t3Up = Close[0] > t3.Value[0];
 
             ADX x = ADX(10);
+            
             KAMA kama = KAMA(2, 9, 109);
+            if (bShowKAMA9)
+                Values[0][0] = kama.Value[0];
+
             RSI rsi = RSI(14, 1);
 
             #endregion
@@ -354,10 +366,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     lines li = new lines() { loc = Open[0], tag = CurrentBar.ToString() };
                     ll.Add(li);
                     if (bPlaySounds)
-                        PlaySound(NinjaTrader.Core.Globals.InstallDir + @"\sounds\Imbalance.wav");
+                        Alert("Alert", Priority.Medium, "Volume Imbalance BUY", sndImb, 10, Brushes.Black, Brushes.BlanchedAlmond);
                     if (bSendEmail)
                         SendMail(sEmailAddress, "Volume Imbalance BUY", "Volume Imbalance BUY " + Instrument + " " + Close[0].ToString());
-                    VolImbanceBuy[0] = Close[0];
                     //Draw.Line(this, tag, true, DateTime.Today.AddDays(-0.4), Open[0], DateTime.Now, Open[0], Brushes.MediumPurple, DashStyleHelper.Dash, 1);
                 }
                 if (red && c1R && Open[0] < Close[1])
@@ -367,10 +378,9 @@ namespace NinjaTrader.NinjaScript.Indicators
                     lines li = new lines() { loc = Open[0], tag = CurrentBar.ToString() };
                     ll.Add(li);
                     if (bPlaySounds)
-                        PlaySound(NinjaTrader.Core.Globals.InstallDir + @"\sounds\Imbalance.wav");
+                        Alert("Alert", Priority.Medium, "Volume Imbalance SELL", sndImb, 10, Brushes.Black, Brushes.BlanchedAlmond);
                     if (bSendEmail)
                         SendMail(sEmailAddress, "Volume Imbalance SELL", "Volume Imbalance SELL " + Instrument + " " + Close[0].ToString());
-                    VolImbanceSell[0] = Close[0];
                 }
             }
 
@@ -387,10 +397,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 DrawText("▴", Green_Brush, false, true);
                 if (bPlaySounds)
-                    PlaySound(Core.Globals.InstallDir + @"\sounds\Buy.wav");
+                    Alert("Alert", Priority.Medium, "Standard BUY", sndBuy, 10, Brushes.Black, Brushes.BlanchedAlmond);
                 if (bSendEmail)
                     SendMail(sEmailAddress, "Standard BUY", "Standard BUY " + Instrument + " " + Close[0].ToString());
-                StandardBuy[0] = Close[0];
             }
 
             // ========================    DOWN CONDITIONS    =========================
@@ -402,10 +411,9 @@ namespace NinjaTrader.NinjaScript.Indicators
             {
                 DrawText("▾", Red_Brush, false, true);
                 if (bPlaySounds)
-                    PlaySound(Core.Globals.InstallDir + @"\sounds\Sell.wav");
+                    Alert("Alert", Priority.Medium, "Standard SELL", sndSell, 10, Brushes.Black, Brushes.BlanchedAlmond);
                 if (bSendEmail)
                     SendMail(sEmailAddress, "Standard SELL", "Standard SELL " + Instrument + " " + Close[0].ToString());
-                StandardSell[0] = Close[0];
             }
 
             if (bShowAdvanced)
@@ -418,13 +426,11 @@ namespace NinjaTrader.NinjaScript.Indicators
                 if (eqHigh)
                 {
                     DrawText("Eq Hi", Brushes.Yellow, false, true);
-                    equalHigh[0] = High[0];
                 }
 
                 if (eqLow)
                 {
                     DrawText("Eq Low", Brushes.Yellow, false, true);
-                    equalLow[0] = Low[0];
                 }
             }
 
@@ -459,7 +465,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                     PlaySound(Core.Globals.InstallDir + @"\sounds\Buy.wav");
                 if (bSendEmail)
                     SendMail(sEmailAddress, "MACD/PSAR BUY", "MACD/PSAR BUY " + Instrument + " " + Close[0].ToString());
-                MacdPsarBuy[0] = Close[0];
             }
 
             if (Trend1 < 0 && Math.Abs(Trend1) > Explo1 && !psarUp && bBigArrowUp && bShowMACDPSARArrow)
@@ -470,7 +475,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                     PlaySound(Core.Globals.InstallDir + @"\sounds\Sell.wav");
                 if (bSendEmail)
                     SendMail(sEmailAddress, "MACD/PSAR SELL", "MACD/PSAR SELL " + Instrument + " " + Close[0].ToString());
-                MacdPsarSell[0] = Close[0];
             }
 
             #endregion
@@ -738,7 +742,11 @@ namespace NinjaTrader.NinjaScript.Indicators
         public int iTickOffset { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Indicator Version", GroupName = "Advanced", Order = 15)]
+        [Display(Name = "Show KAMA 9", GroupName = "Advanced", Order = 15)]
+        public bool bShowKAMA9 { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Indicator Version", GroupName = "Advanced", Order = 16)]
         public string myVersion { get; set; }
 
         //////////////////////////////////////////////////////////////////////////////
@@ -779,6 +787,7 @@ namespace NinjaTrader.NinjaScript.Indicators
         { get; set; }
 
 
+
         #endregion
     }
 
@@ -791,18 +800,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private Optimus[] cacheOptimus;
-		public Optimus Optimus(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
+		public Optimus Optimus(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, bool bShowKAMA9, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return Optimus(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
+			return Optimus(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, bShowKAMA9, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 
-		public Optimus Optimus(ISeries<double> input, bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
+		public Optimus Optimus(ISeries<double> input, bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, bool bShowKAMA9, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
 			if (cacheOptimus != null)
 				for (int idx = 0; idx < cacheOptimus.Length; idx++)
-					if (cacheOptimus[idx] != null && cacheOptimus[idx].bUseWaddah == bUseWaddah && cacheOptimus[idx].bUseAO == bUseAO && cacheOptimus[idx].bUsePSAR == bUsePSAR && cacheOptimus[idx].bUseSqueeze == bUseSqueeze && cacheOptimus[idx].bUseMACD == bUseMACD && cacheOptimus[idx].bUseHMA == bUseHMA && cacheOptimus[idx].bUseSuperTrend == bUseSuperTrend && cacheOptimus[idx].bUseT3 == bUseT3 && cacheOptimus[idx].bUseFisher == bUseFisher && cacheOptimus[idx].iMinADX == iMinADX && cacheOptimus[idx].bShowRegularBuySell == bShowRegularBuySell && cacheOptimus[idx].bShowMACDPSARArrow == bShowMACDPSARArrow && cacheOptimus[idx].bVolumeImbalances == bVolumeImbalances && cacheOptimus[idx].bShowTramp == bShowTramp && cacheOptimus[idx].bShowSqueeze == bShowSqueeze && cacheOptimus[idx].bShowRevPattern == bShowRevPattern && cacheOptimus[idx].bShowAdvanced == bShowAdvanced && cacheOptimus[idx].bShowEvilTimes == bShowEvilTimes && cacheOptimus[idx].bPlaySounds == bPlaySounds && cacheOptimus[idx].bSendEmail == bSendEmail && cacheOptimus[idx].sEmailAddress == sEmailAddress && cacheOptimus[idx].iTextSize == iTextSize && cacheOptimus[idx].iDotSize == iDotSize && cacheOptimus[idx].iTickOffset == iTickOffset && cacheOptimus[idx].myVersion == myVersion && cacheOptimus[idx].bWaddahCandle == bWaddahCandle && cacheOptimus[idx].iWaddahIntense == iWaddahIntense && cacheOptimus[idx].iWaddahBuffer == iWaddahBuffer && cacheOptimus[idx].bLindaCandle == bLindaCandle && cacheOptimus[idx].iLindaIntense == iLindaIntense && cacheOptimus[idx].EqualsInput(input))
+					if (cacheOptimus[idx] != null && cacheOptimus[idx].bUseWaddah == bUseWaddah && cacheOptimus[idx].bUseAO == bUseAO && cacheOptimus[idx].bUsePSAR == bUsePSAR && cacheOptimus[idx].bUseSqueeze == bUseSqueeze && cacheOptimus[idx].bUseMACD == bUseMACD && cacheOptimus[idx].bUseHMA == bUseHMA && cacheOptimus[idx].bUseSuperTrend == bUseSuperTrend && cacheOptimus[idx].bUseT3 == bUseT3 && cacheOptimus[idx].bUseFisher == bUseFisher && cacheOptimus[idx].iMinADX == iMinADX && cacheOptimus[idx].bShowRegularBuySell == bShowRegularBuySell && cacheOptimus[idx].bShowMACDPSARArrow == bShowMACDPSARArrow && cacheOptimus[idx].bVolumeImbalances == bVolumeImbalances && cacheOptimus[idx].bShowTramp == bShowTramp && cacheOptimus[idx].bShowSqueeze == bShowSqueeze && cacheOptimus[idx].bShowRevPattern == bShowRevPattern && cacheOptimus[idx].bShowAdvanced == bShowAdvanced && cacheOptimus[idx].bShowEvilTimes == bShowEvilTimes && cacheOptimus[idx].bPlaySounds == bPlaySounds && cacheOptimus[idx].bSendEmail == bSendEmail && cacheOptimus[idx].sEmailAddress == sEmailAddress && cacheOptimus[idx].iTextSize == iTextSize && cacheOptimus[idx].iDotSize == iDotSize && cacheOptimus[idx].iTickOffset == iTickOffset && cacheOptimus[idx].bShowKAMA9 == bShowKAMA9 && cacheOptimus[idx].myVersion == myVersion && cacheOptimus[idx].bWaddahCandle == bWaddahCandle && cacheOptimus[idx].iWaddahIntense == iWaddahIntense && cacheOptimus[idx].iWaddahBuffer == iWaddahBuffer && cacheOptimus[idx].bLindaCandle == bLindaCandle && cacheOptimus[idx].iLindaIntense == iLindaIntense && cacheOptimus[idx].EqualsInput(input))
 						return cacheOptimus[idx];
-			return CacheIndicator<Optimus>(new Optimus(){ bUseWaddah = bUseWaddah, bUseAO = bUseAO, bUsePSAR = bUsePSAR, bUseSqueeze = bUseSqueeze, bUseMACD = bUseMACD, bUseHMA = bUseHMA, bUseSuperTrend = bUseSuperTrend, bUseT3 = bUseT3, bUseFisher = bUseFisher, iMinADX = iMinADX, bShowRegularBuySell = bShowRegularBuySell, bShowMACDPSARArrow = bShowMACDPSARArrow, bVolumeImbalances = bVolumeImbalances, bShowTramp = bShowTramp, bShowSqueeze = bShowSqueeze, bShowRevPattern = bShowRevPattern, bShowAdvanced = bShowAdvanced, bShowEvilTimes = bShowEvilTimes, bPlaySounds = bPlaySounds, bSendEmail = bSendEmail, sEmailAddress = sEmailAddress, iTextSize = iTextSize, iDotSize = iDotSize, iTickOffset = iTickOffset, myVersion = myVersion, bWaddahCandle = bWaddahCandle, iWaddahIntense = iWaddahIntense, iWaddahBuffer = iWaddahBuffer, bLindaCandle = bLindaCandle, iLindaIntense = iLindaIntense }, input, ref cacheOptimus);
+			return CacheIndicator<Optimus>(new Optimus(){ bUseWaddah = bUseWaddah, bUseAO = bUseAO, bUsePSAR = bUsePSAR, bUseSqueeze = bUseSqueeze, bUseMACD = bUseMACD, bUseHMA = bUseHMA, bUseSuperTrend = bUseSuperTrend, bUseT3 = bUseT3, bUseFisher = bUseFisher, iMinADX = iMinADX, bShowRegularBuySell = bShowRegularBuySell, bShowMACDPSARArrow = bShowMACDPSARArrow, bVolumeImbalances = bVolumeImbalances, bShowTramp = bShowTramp, bShowSqueeze = bShowSqueeze, bShowRevPattern = bShowRevPattern, bShowAdvanced = bShowAdvanced, bShowEvilTimes = bShowEvilTimes, bPlaySounds = bPlaySounds, bSendEmail = bSendEmail, sEmailAddress = sEmailAddress, iTextSize = iTextSize, iDotSize = iDotSize, iTickOffset = iTickOffset, bShowKAMA9 = bShowKAMA9, myVersion = myVersion, bWaddahCandle = bWaddahCandle, iWaddahIntense = iWaddahIntense, iWaddahBuffer = iWaddahBuffer, bLindaCandle = bLindaCandle, iLindaIntense = iLindaIntense }, input, ref cacheOptimus);
 		}
 	}
 }
@@ -811,14 +820,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.Optimus Optimus(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
+		public Indicators.Optimus Optimus(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, bool bShowKAMA9, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.Optimus(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
+			return indicator.Optimus(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, bShowKAMA9, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 
-		public Indicators.Optimus Optimus(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
+		public Indicators.Optimus Optimus(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, bool bShowKAMA9, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.Optimus(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
+			return indicator.Optimus(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, bShowKAMA9, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 	}
 }
@@ -827,14 +836,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.Optimus Optimus(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
+		public Indicators.Optimus Optimus(bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, bool bShowKAMA9, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.Optimus(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
+			return indicator.Optimus(Input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, bShowKAMA9, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 
-		public Indicators.Optimus Optimus(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
+		public Indicators.Optimus Optimus(ISeries<double> input , bool bUseWaddah, bool bUseAO, bool bUsePSAR, bool bUseSqueeze, bool bUseMACD, bool bUseHMA, bool bUseSuperTrend, bool bUseT3, bool bUseFisher, int iMinADX, bool bShowRegularBuySell, bool bShowMACDPSARArrow, bool bVolumeImbalances, bool bShowTramp, bool bShowSqueeze, bool bShowRevPattern, bool bShowAdvanced, bool bShowEvilTimes, bool bPlaySounds, bool bSendEmail, string sEmailAddress, int iTextSize, int iDotSize, int iTickOffset, bool bShowKAMA9, string myVersion, bool bWaddahCandle, int iWaddahIntense, int iWaddahBuffer, bool bLindaCandle, int iLindaIntense)
 		{
-			return indicator.Optimus(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
+			return indicator.Optimus(input, bUseWaddah, bUseAO, bUsePSAR, bUseSqueeze, bUseMACD, bUseHMA, bUseSuperTrend, bUseT3, bUseFisher, iMinADX, bShowRegularBuySell, bShowMACDPSARArrow, bVolumeImbalances, bShowTramp, bShowSqueeze, bShowRevPattern, bShowAdvanced, bShowEvilTimes, bPlaySounds, bSendEmail, sEmailAddress, iTextSize, iDotSize, iTickOffset, bShowKAMA9, myVersion, bWaddahCandle, iWaddahIntense, iWaddahBuffer, bLindaCandle, iLindaIntense);
 		}
 	}
 }
