@@ -35,7 +35,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
     public class SkyFire : Strategy
     {
-        private string sVersion = "1.0";
+        private string sVersion = "1.1";
 
         #region SHITLOAD OF VARIABLES
 
@@ -396,14 +396,14 @@ namespace NinjaTrader.NinjaScript.Strategies
                 }
                 if (wadaUp && bExitWaddah)
                 {
-                    ExitLong("MyEntryLong");
+                    ExitShort("MyEntryShort");
                     Print("Exit = Waddah Reversed");
                     sLastTrade = "Exit = Waddah Reversed";
                     iOpenPositions = 0;
                 }
                 if (psarUp && bExitPSAR)
                 {
-                    ExitLong("MyEntryLong");
+                    ExitShort("MyEntryShort");
                     Print("Exit = PSAR Reversed");
                     sLastTrade = "Exit = PSAR Reversed";
                     iOpenPositions = 0;
