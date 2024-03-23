@@ -30,18 +30,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 		{
 			if (State == State.SetDefaults)
 			{
-				Description									= @"Enter the description for your new custom Indicator here.";
-				Name										= "DTCScalper";
-				Calculate									= Calculate.OnEachTick;
-				IsOverlay									= false;
-				DisplayInDataBox							= true;
-				DrawOnPricePanel							= true;
-				DrawHorizontalGridLines						= true;
-				DrawVerticalGridLines						= true;
-				PaintPriceMarkers							= true;
-				ScaleJustification							= NinjaTrader.Gui.Chart.ScaleJustification.Right;
-				IsSuspendedWhileInactive					= true;
-						
+				Description = @"Enter the description for your new custom Indicator here.";
+				Name = "DTCScalper";
+				Calculate = Calculate.OnEachTick;
+				IsOverlay = false;
+				DisplayInDataBox = true;
+				DrawOnPricePanel = true;
+				DrawHorizontalGridLines = true;
+				DrawVerticalGridLines = true;
+				PaintPriceMarkers = true;
+				ScaleJustification = NinjaTrader.Gui.Chart.ScaleJustification.Right;
+				IsSuspendedWhileInactive = true;
+
 				AddPlot(new Stroke(Brushes.Lime, 4), PlotStyle.Dot, "green");
 				AddPlot(new Stroke(Brushes.Red, 4), PlotStyle.Dot, "red");
 				AddPlot(new Stroke(Brushes.Lime, 1), PlotStyle.Line, "greens");
@@ -54,54 +54,72 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		void DrawShit()
 		{
+			Brush front = Brushes.White;
+			Brush back = Brushes.Green;
+			String t = String.Empty;
+
 			var up = Volume[0] * (Close[0] - Low[0]) / (High[0] - Low[0]);
 			var down = Volume[0] * (High[0] - Close[0]) / (High[0] - Low[0]);
-			
+
 			green[0] = up;
 			red[0] = down;
 			greens[0] = up;
 			reds[0] = down;
-			
-			//Draw.Text(this, "tag1", "Text to draw", 10, 10, Brushes.White);
+
+			var buyingPercent = (up / Volume[0]) * 100;
+			var sellingPercent = (down / Volume[0]) * 100;
+
+			if (up > down)
+			{
+				t = "Buy Vol Higher at " + buyingPercent.ToString("#") + "%";
+			}
+			else
+			{
+                t = "Sell Vol Higher at " + sellingPercent.ToString("#") + "%";
+                back = Brushes.Red;
+            }
+
+			Draw.TextFixed(this, "tag1", t, TextPosition.BottomRight, front, new SimpleFont("Arial", 14), back, back, 100);
+
 		}
-		
+
 		protected override void OnMarketData(MarketDataEventArgs marketDataUpdate)
-{
-	DrawShit();
-}
+		{
+			DrawShit();
+		}
 
 		protected override void OnBarUpdate()
 		{
 			DrawShit();
 		}
-	
-[Browsable(false)]
-[XmlIgnore]
-public Series<double> greens
-{
-  get { return Values[0]; }
-}
 
-[Browsable(false)]
-[XmlIgnore]
-public Series<double> reds
-{
-  get { return Values[1]; }
-}
+		[Browsable(false)]
+		[XmlIgnore]
+		public Series<double> greens
+		{
+			get { return Values[0]; }
+		}
 
-[Browsable(false)]
-[XmlIgnore]
-public Series<double> green
-{
-  get { return Values[2]; }
-}
+		[Browsable(false)]
+		[XmlIgnore]
+		public Series<double> reds
+		{
+			get { return Values[1]; }
+		}
 
-[Browsable(false)]
-[XmlIgnore]
-public Series<double> red
-{
-  get { return Values[3]; }
-}
+		[Browsable(false)]
+		[XmlIgnore]
+		public Series<double> green
+		{
+			get { return Values[2]; }
+		}
+
+		[Browsable(false)]
+		[XmlIgnore]
+		public Series<double> red
+		{
+			get { return Values[3]; }
+		}
 
 	}
 	
