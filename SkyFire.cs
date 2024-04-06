@@ -29,13 +29,14 @@ using System.Diagnostics;
 using System.Runtime.Remoting.Contexts;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using NinjaTrader.NinjaScript.Indicators.LizardIndicators;
 #endregion
 
 namespace NinjaTrader.NinjaScript.Strategies
 {
     public class SkyFire : Strategy
     {
-        private string sVersion = "1.1";
+        private string sVersion = "1.3";
 
         #region SHITLOAD OF VARIABLES
 
@@ -228,8 +229,11 @@ namespace NinjaTrader.NinjaScript.Strategies
                 bUseSqueeze = false;
                 bUseMACD = false;
                 bUseAO = false;
-                bUseHMA = false;
+                bUseHMA = false; 
+                bUseADXVMA = false;
+                bWaddahAboveE1 = false;
                 iWaddahIntense = 150;
+                iWaddahThreshold = 0;
                 bExitWaddah = false;
                 bExitKama9 = false;
                 bExitPSAR = false;
@@ -290,6 +294,7 @@ namespace NinjaTrader.NinjaScript.Strategies
             MACD1[0] = SMAF[0] - SMAS[0];
             bool macdUp = MACD1[0] - SMA(MACD1, 16)[0] > 0;
 
+            // Waddah Explosion
             double Trend1, Trend2, Explo1, Explo2, Dead;
             Trend1 = (MACD(20, 40, 9)[0] - MACD(20, 40, 9)[1]) * iWaddahIntense;
             Trend2 = (MACD(20, 40, 9)[2] - MACD(20, 40, 9)[3]) * iWaddahIntense;
@@ -320,6 +325,11 @@ namespace NinjaTrader.NinjaScript.Strategies
             ADX x = ADX(10);
             KAMA kama9 = KAMA(2, 9, 109);
             RSI rsi = RSI(14, 1);
+
+            // Contribution from smitty4728 on Discord
+            var amaADXVMAPlus1 = amaADXVMAPlus(Close, false, 8, 8, 8);
+            bool adxvmaUP = amaADXVMAPlus1.Trend[0] == 1;
+            bool adxvmaDN = amaADXVMAPlus1.Trend[0] == -1;
 
             #endregion
 
@@ -356,7 +366,6 @@ namespace NinjaTrader.NinjaScript.Strategies
             var eqLow = c0G && c1G && c2R && c3R && (Low[1] < bb_bottom || Low[2] < bb_bottom) && Close[0] > Close[1] && (Open[1] == Close[2] || Open[1] == Close[2] + TickSize || Open[1] + TickSize == Close[2]);
 
             #endregion
-
 
             #region EXIT POSITIONS
 
@@ -423,7 +432,19 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             // ========================    UP CONDITIONS    ===========================
 
-            if ((!macdUp && bUseMACD) || (!psarUp && bUsePSAR) || (!fisherUp && bUseFisher) || (!t3Up && bUseT3) || (!wadaUp && bUseWaddah) || (!superUp && bUseSuperTrend) || (!sqeezeUp && bUseSqueeze) || x.Value[0] < iMinADX || (bUseHMA && !hullUp) || (bUseAO && !bAOGreen))
+            if ((!macdUp && bUseMACD) || 
+                (!psarUp && bUsePSAR) || 
+                (!fisherUp && bUseFisher) || 
+                (!t3Up && bUseT3) || 
+                (!wadaUp && bUseWaddah) || 
+                (!superUp && bUseSuperTrend) || 
+                (!sqeezeUp && bUseSqueeze) || 
+                x.Value[0] < iMinADX || 
+                Math.Abs(Trend1) < iWaddahThreshold ||
+                (bWaddahAboveE1 && Math.Abs(Trend1) < Explo1) ||
+                (bUseHMA && !hullUp) || 
+                (bUseADXVMA && !adxvmaUP) ||    
+                (bUseAO && !bAOGreen))
                 bShowUp = false;
 
             if (green && bShowUp)
@@ -431,7 +452,19 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             // ========================    DOWN CONDITIONS    =========================
 
-            if ((macdUp && bUseMACD) || (psarUp && bUsePSAR) || (fisherUp && bUseFisher) || (t3Up && bUseT3) || (wadaUp && bUseWaddah) || (superUp && bUseSuperTrend) || (sqeezeUp && bUseSqueeze) || x.Value[0] < iMinADX || (bUseHMA && hullUp) || (bUseAO && bAOGreen))
+            if ((macdUp && bUseMACD) || 
+                (psarUp && bUsePSAR) || 
+                (fisherUp && bUseFisher) || 
+                (t3Up && bUseT3) || 
+                (wadaUp && bUseWaddah) || 
+                (superUp && bUseSuperTrend) || 
+                (sqeezeUp && bUseSqueeze) || 
+                x.Value[0] < iMinADX || 
+                Math.Abs(Trend1) < iWaddahThreshold ||
+                (bWaddahAboveE1 && Math.Abs(Trend1) < Explo1) ||
+                (bUseHMA && hullUp) ||
+                (bUseADXVMA && !adxvmaDN) ||
+                (bUseAO && bAOGreen))
                 bShowDown = false;
 
             if (red && bShowDown)
@@ -563,8 +596,20 @@ namespace NinjaTrader.NinjaScript.Strategies
         public bool bUseFisher { get; set; }
 
         [NinjaScriptProperty]
-        [Display(Name = "Minimum ADX", GroupName = "Buy/Sell Filters", Order = 10)]
+        [Display(Name = "When Waddah Exploding", GroupName = "Buy/Sell Filters", Order = 10, Description = "Only trade when Waddah Explosion is above the explosion line")]
+        public bool bWaddahAboveE1 { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Minimum ADX", GroupName = "Buy/Sell Filters", Order = 11, Description = "ADX must be at this minimum level to trade")]
         public int iMinADX { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Minimum Waddah", GroupName = "Buy/Sell Filters", Order = 12, Description = "Waddah Explosion must be at this minimum level to trade")]
+        public int iWaddahThreshold { get; set; }
+
+        [NinjaScriptProperty]
+        [Display(Name = "Lizard ADXVMA Plus", GroupName = "Buy/Sell Filters", Order = 13)]
+        public bool bUseADXVMA { get; set; }
 
         #endregion
 
