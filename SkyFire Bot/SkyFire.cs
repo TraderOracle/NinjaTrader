@@ -22,7 +22,6 @@ using NinjaTrader.NinjaScript.Indicators;
 using NinjaTrader.NinjaScript.DrawingTools;
 using NinjaTrader.NinjaScript.MarketAnalyzerColumns;
 using NinjaTrader.CQG.ProtoBuf;
-using static NinjaTrader.NinjaScript.Indicators.Optimus;
 using System.Net.Mail;
 using System.Reflection.Emit;
 using System.Diagnostics;
