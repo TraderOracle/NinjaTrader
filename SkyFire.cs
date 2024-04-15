@@ -1,4 +1,4 @@
-﻿#region Using declarations
+#region Using declarations
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -36,7 +36,7 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
     public class SkyFire : Strategy
     {
-        private string sVersion = "1.3";
+        private string sVersion = "1.5";
 
         #region SHITLOAD OF VARIABLES
 
@@ -474,7 +474,6 @@ namespace NinjaTrader.NinjaScript.Strategies
 
             return "0000";
         }
-
 
         protected override void OnPositionUpdate(Cbi.Position position, double averagePrice, int quantity, Cbi.MarketPosition marketPosition)
         {
