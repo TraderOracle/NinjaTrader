@@ -224,7 +224,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 
             // Awesome Oscillator
             bool bAOGreen = false;
-            var ao = SMA(Median, 5)[0] - SMA(Median, 34)[0];
+            AO[0] = SMA(Median, 5)[0] - SMA(Median, 34)[0];
             if (AO[0] > AO[1])
                 bAOGreen = true;
 
