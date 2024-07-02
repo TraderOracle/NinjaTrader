@@ -78,25 +78,54 @@ namespace NinjaTrader.NinjaScript.Indicators
                 }
 			}
 			
-            FibonacciRetracements fib2 = Draw.FibonacciRetracements(this, "tag1", true, 100, L2, 0, H2);
-			fib2.PriceLevels.Add(new PriceLevel(78.6, Brushes.Wheat));
-			fib2.PriceLevels.Add(new PriceLevel(38.4, Brushes.Wheat));
-			fib2.IsExtendedLinesRight = true;
+            FibonacciRetracements fib2 = Draw.FibonacciRetracements(this, "tag1", true, 300, L2, 0, H2);
+			//fib2.PriceLevels.Clear();
+			//fib2.PriceLevels.Add(new PriceLevel(0.00, Brushes.Wheat){ IsVisible = true });
+			//fib2.PriceLevels.Add(new PriceLevel(0.236, Brushes.Wheat){ IsVisible = true });
+			//fib2.PriceLevels.Add(new PriceLevel(0.382, Brushes.Wheat){ IsVisible = true });
+			//fib2.PriceLevels.Add(new PriceLevel(0.5, Brushes.Wheat){ IsVisible = true });
+			//fib2.PriceLevels.Add(new PriceLevel(0.618, Brushes.Wheat));
+			//fib2.PriceLevels.Add(new PriceLevel(0.786, Brushes.Wheat));
+			//fib2.PriceLevels.Add(new PriceLevel(1.00, Brushes.Wheat));
+			//fib2.IsExtendedLinesRight = true;
+			//fib2.IsVisible = true;
+    		
 			
-            FibonacciRetracements fib10 = Draw.FibonacciRetracements(this, "tag2", true, 200, L10, 0, H10);
-			fib10.PriceLevels.Add(new PriceLevel(78.6, Brushes.Wheat));
-			fib10.PriceLevels.Add(new PriceLevel(38.4, Brushes.Wheat));
-			fib10.IsExtendedLinesRight = true;
-            fib10.IsExtendedLinesRight = true;
-        }
-		
+            FibonacciRetracements fib10 = Draw.FibonacciRetracements(this, "tag2", true, 400, L10, 0, H10);
+			//fib10.PriceLevels.Clear();
+			//fib10.PriceLevels.Add(new PriceLevel(0.00, Brushes.Wheat){ IsVisible = true });
+			//fib10.PriceLevels.Add(new PriceLevel(0.236, Brushes.Wheat){ IsVisible = true });
+			//fib10.PriceLevels.Add(new PriceLevel(0.382, Brushes.Wheat){ IsVisible = true });
+			//fib10.PriceLevels.Add(new PriceLevel(0.5, Brushes.Wheat){ IsVisible = true });
+			//fib10.PriceLevels.Add(new PriceLevel(0.618, Brushes.Wheat){ IsVisible = true });
+			//fib10.PriceLevels.Add(new PriceLevel(0.786, Brushes.Wheat){ IsVisible = true });
+			//fib10.PriceLevels.Add(new PriceLevel(1.00, Brushes.Wheat){ IsVisible = true });
+			//fib10.IsExtendedLinesRight = true;
+        	//fib10.IsVisible = true;
+    		
+		}
 		protected override void OnBarUpdate()
 		{
-			if (BarsInProgress != 0)
-                return;
+    	if (BarsInProgress != 0)
+        return;
 
-			DrawShit();
-        }
+    	try
+    		{
+        		// Ensure bars data is available
+        		if (Bars == null || Bars.Count == 0)
+        		{
+        	 	   Print("No bars data available.");
+         	   		return;
+       			}
+
+        		// Call DrawShit to update the Fibonacci retracements
+        		DrawShit();
+    		}
+    	catch (Exception ex)
+    	{
+        Print("Error in OnBarUpdate: " + ex.Message);
+    }
+}
 	}
 }
 
