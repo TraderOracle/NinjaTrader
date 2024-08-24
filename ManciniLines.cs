@@ -92,7 +92,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (s.Contains("major"))
                     {
                         sa = s.Replace("(major)", "").Trim();
-						Print("!!!!**" + sa + "!!!!");
                         sa = sa.Substring(0, 4);
 						Print("6666**" + sa + "!!!!");
                         double dPrice = Convert.ToDouble(sa);
@@ -101,6 +100,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     else
                     {
 						Print("7777**" + sa + "****");
+						sa = sa.Substring(0, 4);
                         double dPrice = Convert.ToDouble(sa);
                         Draw.HorizontalLine(this, "bitch" + idx, dPrice, colResist, DashStyleHelper.Solid, 1);
                     }
@@ -141,7 +141,6 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (s.Contains("major"))
                     {
                         sa = s.Replace("(major)", "").Trim();
-						Print("!!!!**" + sa + "!!!!");
                         sa = sa.Substring(0, 4);
 						Print("2222**" + sa + "!!!!");
                         double dPrice = Convert.ToDouble(sa);
@@ -149,6 +148,7 @@ namespace NinjaTrader.NinjaScript.Indicators
                     }
                     else
                     {
+						sa = sa.Substring(0, 4);
 						Print("3333**" + sa + "****");
                         double dPrice = Convert.ToDouble(sa);
                         Draw.HorizontalLine(this, "ho" + idx, dPrice, colSupport, DashStyleHelper.Solid, 1);
