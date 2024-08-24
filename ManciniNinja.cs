@@ -67,8 +67,8 @@ namespace NinjaTrader.NinjaScript.Indicators
                 Calculate                                   = Calculate.OnEachTick;
                 IsOverlay                                   = true;
 
-                Support                                     = "5200 (major), 5093, 5088 (major)";
-                Resist                                      = "5330 (major), 5536, 5442";
+                Support                                     = "5523, 5512, 5212 (major)";
+                Resist                                      = "5132 (major), 5326, 5522";
                 colSupport                                  = Brushes.Green;
                 colMajorSupport                             = Brushes.Lime;
                 colResist                                   = Brushes.Red;
@@ -110,13 +110,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (sa.Contains("major"))
                     {
                         sa = sa.Replace("(major)", "").Trim();
-						Print("8888**" + sa + "****");
+                        sa = sa.Substring(0, 4);
+                        Print("8888**" + sa + "****");
                         double dPrice = Convert.ToDouble(sa.Trim());
                         Draw.HorizontalLine(this, "bitch" + idx, dPrice, colMajorResist, DashStyleHelper.Solid, 1);
                     }
                     else
                     {
-						Print("9999**" + sa + "****");
+                        sa = sa.Substring(0, 4);
+                        Print("9999**" + sa + "****");
                         double dPrice = Convert.ToDouble(sa);
                         Draw.HorizontalLine(this, "bitch" + idx, dPrice, colResist, DashStyleHelper.Solid, 1);
                     }
@@ -159,13 +161,15 @@ namespace NinjaTrader.NinjaScript.Indicators
                     if (sa.Contains("major"))
                     {
                         sa = sa.Replace("(major)", "").Trim();
-						Print("4444**" + sa + "****");
+                        sa = sa.Substring(0, 4);
+                        Print("4444**" + sa + "****");
                         double dPrice = Convert.ToDouble(sa.Trim());
                         Draw.HorizontalLine(this, "ho" + idx, dPrice, colMajorSupport, DashStyleHelper.Solid, 1);
                     }
                     else
                     {
-						Print("5555**" + sa + "****");
+                        sa = sa.Substring(0, 4);
+                        Print("5555**" + sa + "****");
                         double dPrice = Convert.ToDouble(sa);
                         Draw.HorizontalLine(this, "ho" + idx, dPrice, colSupport, DashStyleHelper.Solid, 1);
                     }
@@ -176,11 +180,12 @@ namespace NinjaTrader.NinjaScript.Indicators
 		
         protected override void OnBarUpdate()
         {
-            if (Bars.IsLastBarOfSession || IsFirstTickOfBar)
-            {
-                DrawSupport();
-		        DrawResist();
-            }
+			//Print(CurrentBar);
+			if (CurrentBar > 6890)
+			{
+				DrawSupport();
+				DrawResist();
+			}
         }
 		
 		#region Properties
