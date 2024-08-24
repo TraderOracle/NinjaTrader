@@ -176,12 +176,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 		
         protected override void OnBarUpdate()
         {
-			//Print(CurrentBar);
-			if (CurrentBar > 6890)
-			{
-				DrawSupport();
-				DrawResist();
-			}
+            if (Bars.IsLastBarOfSession || IsFirstTickOfBar)
+            {
+                DrawSupport();
+		DrawResist();
+            }
         }
 		
 		#region Properties
