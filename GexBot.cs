@@ -1,8 +1,5 @@
 #region Using declarations
 
-// Right-click background and choose Remove and Sorty Usings, so don't risk causing
-// compiler errors on other's computers.  Rare but has bitten me before.
-
 using Newtonsoft.Json.Linq;
 using NinjaTrader.Gui;
 using NinjaTrader.Gui.Chart;
@@ -17,7 +14,15 @@ using System.Timers;
 using System.Windows.Media;
 using NinjaTrader.NinjaScript.Indicators;
 using System.Linq;
-
+using NinjaTrader.Cbi;
+using NinjaTrader.Gui.Tools;
+using SharpDX.Direct2D1;
+using Brush = System.Windows.Media.Brush;
+using Ellipse = SharpDX.Direct2D1.Ellipse;
+using EllipseGeometry = SharpDX.Direct2D1.EllipseGeometry;
+using SharpDX.DirectWrite;
+using SolidColorBrush = System.Windows.Media.SolidColorBrush;
+using System.Xml.Serialization;
 
 #endregion
 
@@ -28,7 +33,7 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public class GexBot : Indicator
 	{
 		#region Constants
-		private const string sVersion = "version 2.2";
+		private const string sVersion = "version 2.3";
 		private const string INDICATOR_NAME = "GexBot";
 
 		private const string GENERAL_GROUP = "General";
@@ -36,7 +41,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		internal const int EXCEPTION_LIMIT = 2;
 		#endregion
-
 
 		#region Variables
 
@@ -47,8 +51,10 @@ namespace NinjaTrader.NinjaScript.Indicators
 		private Timer timer;
 		private Timer CouchTimer;
 		private bool bInProgress = false;
+        private StrokeStyleProperties strokeStyleProperties;
+        private SharpDX.Direct2D1.DashStyle dashes = SharpDX.Direct2D1.DashStyle.Solid;
 
-		private string VolGex = "";
+        private string VolGex = "";
 		private string Vol0Gamma = "";
 		private string VolMajPos = "";
 		private string VolMinNeg = "";
@@ -95,7 +101,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		#endregion
 
-
 		#region DisplayName override
 		public override string DisplayName
 		{
@@ -105,7 +110,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 			}
 		}
 		#endregion
-
 
 		#region OnStateChange
 
@@ -137,20 +141,20 @@ namespace NinjaTrader.NinjaScript.Indicators
 				iCouchRefresh = 3;
 				rightOffset = 500;
 				WidthFactor = 1;
-				dotSize = 5;
-				bShowMaxChange = true;
+				dotSize = 2;
+                GreekdotSize = 7;
+                bShowMaxChange = false;
 				bShowStatus = true;
-
-				PositiveLine = new Stroke(Brushes.Lime, DashStyleHelper.Solid, 2);
-				NegativeLine = new Stroke(Brushes.Orange, DashStyleHelper.Solid, 2);
-			}
+                Negative = Brushes.Orange;
+                Positive = Brushes.Lime;
+            }
 			else if (State == State.Configure)
 			{
 				exceptionCount = 0;
 
-				if (string.IsNullOrWhiteSpace(Greek)) Greek = "none";
+				if (string.IsNullOrWhiteSpace(Greek)) 
+					Greek = "none";
 				isGreekNone = Greek.Equals("none");
-				//Print("GexBot.OnStateChange -> Greek: " + Greek);
 
 				string subType = SubscriptionType.ToString().ToLower();
 				string sB = SubscriptionType == GexSubscriptionType.Classic ? "zero/maxchange" : "full/maxchange";
@@ -171,15 +175,11 @@ namespace NinjaTrader.NinjaScript.Indicators
 				timer.Elapsed += OnTimedEvent;
 				timer.Enabled = true;
 
-				CreateBrushes();
-
 				FetchData();
 				MaxChanges();
 			}
 			else if (State == State.Terminated)
 			{
-				DisposeBrushes();
-
 				if (CouchTimer != null)
 				{
 					CouchTimer.Enabled = false;
@@ -195,269 +195,142 @@ namespace NinjaTrader.NinjaScript.Indicators
 			}
 		}
 
-		// convert Brush to SharpDX Brush and cache for better performance
-		private void CreateBrushes()
-		{
-			if (RenderTarget != null)
-			{
-				dotBrushes = new SharpDX.Direct2D1.Brush[]
-				{
-					Brushes.White.ToDxBrush(RenderTarget),
-					Brushes.Lime.ToDxBrush(RenderTarget),
-					Brushes.Green.ToDxBrush(RenderTarget),
-					Brushes.DarkGreen.ToDxBrush(RenderTarget),
-					Brushes.Red.ToDxBrush(RenderTarget),
-				};
-			}
-		}
-
-		// Dispose of all cached SharpDX.Direct2D1.Brushes
-		private void DisposeBrushes()
-		{
-			if (dotBrushes != null)
-			{
-				foreach (var brush in dotBrushes)
-				{
-					if (brush != null)
-					{
-						brush.Dispose();
-					}
-				}
-			}
-		}
-
 		#endregion
-
 
 		#region Timed Event / Render
 
 		protected override void OnRender(ChartControl chartControl, ChartScale chartScale)
 		{
+			base.OnRender(chartControl, chartScale);
 
 			if (chartControl == null || chartScale == null || bInProgress)
 				return;
 
-			if (exceptionCount > EXCEPTION_LIMIT)
-				return;
+			if (Greek.IsNullOrEmpty())
+				Greek = "none";
 
-			base.OnRender(chartControl, chartScale);
-
-
-			// =====================================================
-			// Save current AntialiasMode and reset back at the end
-			SharpDX.Direct2D1.AntialiasMode oldAntialiasMode = RenderTarget.AntialiasMode;
-			RenderTarget.AntialiasMode = SharpDX.Direct2D1.AntialiasMode.Aliased;
-			// =====================================================
-			// =====================================================
-
-
-			try
+			if (bShowStatus)
 			{
-				// moved to State.Configure
-				//if (string.IsNullOrWhiteSpace(Greek)) Greek = "none";
-
-				if (bShowStatus)
+				try
 				{
 					int ia = VolGex.IndexOf('.');
 					if (ia != -1)
 						VolGex = VolGex.Substring(0, ia);
 					int iYPos = 130;
 					int iXPos = iPos;
-
-					// use string.Format for performance and preventing string objects created with every concat/+
-					DrawText(iXPos, iYPos, string.Format("{0} {1} ({2}/{3})", INDICATOR_NAME, sVersion, SubscriptionType, nextFull), 16, Brushes.White);
-					if (isGreekNone)
+					DrawText(iXPos, iYPos, "GexBot " + sVersion + " (" + SubscriptionType.ToString().ToLower() + "/" + nextFull + ")", 16, Brushes.White);
+					if (Greek.Equals("none"))
 					{
-						iYPos += 25;
 						if (VolGex.Contains("-"))
-							DrawText(iXPos, iYPos, "Net GEX: " + VolGex, 15, Brushes.Orange);
+							DrawText(iXPos, iYPos += 25, "Net GEX: " + VolGex, 15, Brushes.Orange);
 						else
-							DrawText(iXPos, iYPos, "Net GEX: " + VolGex, 15, Brushes.Lime);
+							DrawText(iXPos, iYPos += 25, "Net GEX: " + VolGex, 15, Brushes.Lime);
 					}
-					iYPos += 25;
-					DrawText(iXPos, iYPos, "Major Positive: " + VolMajPos, 14, Brushes.Lime);
-					iYPos += 23;
-					DrawText(iXPos, iYPos, "Major Negative: " + VolMinNeg, 14, Brushes.Orange);
-					iYPos += 23;
-					if (isGreekNone)
+					DrawText(iXPos, iYPos += 23, "Major Positive: " + VolMajPos, 14, Brushes.Lime);
+					DrawText(iXPos, iYPos += 23, "Major Negative: " + VolMinNeg, 14, Brushes.Orange);
+					if (Greek.Equals("none"))
 					{
-						DrawText(iXPos, iYPos, "Zero Gamma: " + Vol0Gamma, 14, Brushes.Yellow);
-						iYPos += 23;
-						DrawText(iXPos, iYPos, "Delta Reversal: " + DeltaReversal, 14, Brushes.Yellow);
+						DrawText(iXPos, iYPos += 23, "Zero Gamma: " + Vol0Gamma, 14, Brushes.Yellow);
+						DrawText(iXPos, iYPos += 23, "Delta Reversal: " + DeltaReversal, 14, Brushes.Yellow);
 					}
 				}
-
-				if (bShowMaxChange && isGreekNone)
-				{
-					if (lc != null && lc.Count > 0)
-					{
-						foreach (changes ch in lc)
-						{
-							if (ch.volume > 0)
-								DrawText((float)chartControl.ActualWidth - 100,
-									(float)chartScale.GetYByValue(ch.price), ch.price + " at " + ch.volume.ToString("F2") + " MM", 16, Brushes.Lime);
-							else
-								DrawText((float)chartControl.ActualWidth - 100,
-									(float)chartScale.GetYByValue(ch.price), ch.price + " at " + ch.volume.ToString("F2") + " MM", 16, Brushes.Orange);
-						}
-					}
-				}
-
-				// strike      5813.77,
-				// call ivol   0.20759955355058616,
-				// put ivol    0.19385544133713904,
-				// greek       - 112.12473444830518,
-
-				//  -100.45876882490465,
-				//	-141.50639139903303,
-				//	-3.8148399741158269
-				if (PositiveLine != null && PositiveLine.BrushDX != null
-					&& NegativeLine != null && NegativeLine.BrushDX != null)
-				{
-					if (!isGreekNone)
-					{
-						if (ll != null && ll.Count > 0)
-						{
-							foreach (lines l in ll)
-							{
-								double xStart = chartControl.GetXByBarIndex(ChartBars, ChartBars.FromIndex);
-								double yMiddle = chartScale.GetYByValue(l.price);
-
-								double dCall = Math.Abs(l.call);
-								dCall = dCall * chartControl.ActualWidth;
-								double xCallEnd = xStart + dCall;
-								SharpDX.Direct2D1.Ellipse eli1 = new SharpDX.Direct2D1.Ellipse(new Vector2((float)xCallEnd, (float)yMiddle), dotSize, dotSize);
-
-								// use brush of positive line...assuming that is desire since colors were same
-								RenderTarget.FillEllipse(eli1, PositiveLine.BrushDX);
-
-								double dPut = Math.Abs(l.put);
-								dPut = dPut * chartControl.ActualWidth;
-								double xPutEnd = xStart + dPut;
-
-								SharpDX.Direct2D1.Ellipse eli2 = new SharpDX.Direct2D1.Ellipse(new Vector2((float)xPutEnd, (float)yMiddle), dotSize, dotSize);
-
-								// use brush of negative line...assuming that is desire since colors were same
-								RenderTarget.FillEllipse(eli2, NegativeLine.BrushDX);
-							}
-						}
-					}
-
-					if (ld != null && ld.Count > 0)
-					{
-						foreach (dots l in ld)
-						{
-							double finalVol = Math.Abs(l.volume);
-							double xStart = chartControl.GetXByBarIndex(ChartBars, ChartBars.FromIndex);
-							//if (lineLoc.Equals("Right"))
-							//{
-							//    xStart = chartControl.ActualWidth + rightOffset;
-							//    if (finalVol > 0)
-							//        finalVol = finalVol * -1;
-							//}
-							//else if (lineLoc.Equals("Left"))
-							//{
-							//if (finalVol < 0)
-							//    finalVol = finalVol * -1;
-							//}
-							finalVol = (finalVol * (WidthFactor / 100)) * chartControl.ActualWidth;
-							double yMiddle = chartScale.GetYByValue(l.price);
-							double xEnd = xStart + finalVol;
-
-							SharpDX.Direct2D1.Ellipse eli = new SharpDX.Direct2D1.Ellipse(new Vector2((float)xEnd, (float)yMiddle), dotSize, dotSize);
-
-							// used array of cached brushes
-							var idx = l.i - 1;
-							if (idx >= 0)
-							{
-								RenderTarget.FillEllipse(eli, dotBrushes[idx]);
-							}
-						}
-					}
-
-					if (ll != null && ll.Count > 0)
-					{
-						foreach (lines l in ll)
-						{
-							double finalVol = l.volume;
-							double xStart = chartControl.GetXByBarIndex(ChartBars, ChartBars.FromIndex);
-							//if (lineLoc.Equals("Right"))
-							//{
-							//    xStart = chartControl.ActualWidth + rightOffset;
-							//    if (finalVol > 0)
-							//        finalVol = finalVol * -1;
-							//}
-							//else if(lineLoc.Equals("Left"))
-							//{
-							if (finalVol < 0)
-								finalVol = finalVol * -1;
-							//}
-
-							finalVol = (finalVol * (WidthFactor / 100)) * chartControl.ActualWidth;
-
-							//double xStart = chartControl.GetXByBarIndex(ChartBars, ChartBars.FromIndex) + (chartControl.ActualWidth) - 1000;
-							double yMiddle = chartScale.GetYByValue(l.price);
-							double xEnd = xStart + finalVol;
-
-							// Change to use Stroke for lines
-							var startVector = new Vector2((float)xStart, (float)yMiddle);
-							var endVector = new Vector2((float)xEnd, (float)yMiddle);
-
-							Stroke stroke = (l.volume > 0) ? PositiveLine : NegativeLine;
-							RenderTarget.DrawLine(startVector, endVector, stroke.BrushDX, stroke.Width, stroke.StrokeStyle);
-						}
-					}
-				}
+				catch { }
 			}
-			#region exception handling
-			catch (Exception ex)
+
+			if (bShowMaxChange && Greek.Equals("none"))
 			{
-				if (exceptionCount < EXCEPTION_LIMIT)
+				foreach (changes ch in lc)
+					try
+					{
+						if (ch.volume > 0)
+							DrawText((float)chartControl.ActualWidth - 100,
+								(float)chartScale.GetYByValue(ch.price), ch.price + " at " + ch.volume.ToString("F2") + " MM", 16, Brushes.Lime);
+						else
+							DrawText((float)chartControl.ActualWidth - 100,
+							(float)chartScale.GetYByValue(ch.price), ch.price + " at " + ch.volume.ToString("F2") + " MM", 16, Brushes.Orange);
+					}
+					catch { }
+			}
+
+			if (!Greek.Equals("none"))
+			{
+				foreach (lines l in ll)
+					try
+					{
+						double xStart = chartControl.GetXByBarIndex(ChartBars, ChartBars.FromIndex);
+						double yMiddle = chartScale.GetYByValue(l.price);
+
+						double dCall = Math.Abs(l.call);
+						dCall = dCall * chartControl.ActualWidth;
+						double xCallEnd = xStart + dCall;
+						Ellipse eli1 = new Ellipse(new Vector2((float)xCallEnd, (float)yMiddle), GreekdotSize, GreekdotSize);
+						RenderTarget.FillEllipse(eli1, Brushes.Lime.ToDxBrush(RenderTarget));
+
+						double dPut = Math.Abs(l.put);
+						dPut = dPut * chartControl.ActualWidth;
+						double xPutEnd = xStart + dPut;
+						Ellipse eli2 = new Ellipse(new Vector2((float)xPutEnd, (float)yMiddle), GreekdotSize, GreekdotSize);
+						RenderTarget.FillEllipse(eli2, Brushes.Orange.ToDxBrush(RenderTarget));
+					}
+					catch { }
+			}
+
+			foreach (dots l in ld)
+			{
+				try
 				{
-					exceptionCount++;
-					string message = string.Format("{0} {1}.OnRender() > EXCEPTION: {2}", Instrument.FullName, INDICATOR_NAME, ex);
+					double finalVol = Math.Abs(l.volume);
+					double xStart = chartControl.GetXByBarIndex(ChartBars, ChartBars.FromIndex);
+					finalVol = (finalVol * (WidthFactor / 100)) * chartControl.ActualWidth;
+					double yMiddle = chartScale.GetYByValue(l.price);
+					double xEnd = xStart + finalVol;
 
-					//if (ex.InnerException != null)
-					//{
-					//	message = string.Format("{0}; inner exception: {1}", message, ex.InnerException.Message);
-					//}
-
-					Log(message, Cbi.LogLevel.Error);
-
-					Print("#################");
-					Print(string.Format("{0} - {1}", DateTime.Now, message));
-					Print("#################");
+					Ellipse eli = new Ellipse(new Vector2((float)xEnd, (float)yMiddle), 3, 3);
+					switch (l.i)
+					{
+						case 1:
+							RenderTarget.FillEllipse(eli, Brushes.White.ToDxBrush(RenderTarget));
+							break;
+						case 2:
+							RenderTarget.FillEllipse(eli, Brushes.Lime.ToDxBrush(RenderTarget));
+							break;
+						case 3:
+							RenderTarget.FillEllipse(eli, Brushes.Green.ToDxBrush(RenderTarget));
+							break;
+						case 4:
+							RenderTarget.FillEllipse(eli, Brushes.DarkGreen.ToDxBrush(RenderTarget));
+							break;
+						case 5:
+							RenderTarget.FillEllipse(eli, Brushes.Red.ToDxBrush(RenderTarget));
+							break;
+					}
 				}
+				catch { }
 			}
-			finally
+
+			foreach (lines l in ll)
 			{
-				// =====================================================
-				// =====================================================
-				// Restore AntialiasMode to original setting
-				RenderTarget.AntialiasMode = oldAntialiasMode;
-				// =====================================================
-				// =====================================================
-			}
-			#endregion
-		}
+				try
+				{
+					double finalVol = Math.Abs(l.volume);
+					double xStart = chartControl.GetXByBarIndex(ChartBars, ChartBars.FromIndex);
+					finalVol = (finalVol * (WidthFactor / 100)) * chartControl.ActualWidth;
 
-		public override void OnRenderTargetChanged()
-		{
-			base.OnRenderTargetChanged();
+					double yMiddle = chartScale.GetYByValue(l.price);
+					double xEnd = xStart + finalVol;
+					strokeStyleProperties = new StrokeStyleProperties
+					{
+						DashStyle = dashes
+					};
 
-			DisposeBrushes();
-			CreateBrushes();
-
-			if (RenderTarget != null)
-			{
-				if (NegativeLine != null)
-					NegativeLine.RenderTarget = RenderTarget;
-
-				if (PositiveLine != null)
-					PositiveLine.RenderTarget = RenderTarget;
+					if (l.volume > 0)
+						RenderTarget.DrawLine(new Vector2((float)xStart, (float)yMiddle), new Vector2((float)xEnd, (float)yMiddle), Positive.ToDxBrush(RenderTarget), 2, new StrokeStyle(Core.Globals.D2DFactory, strokeStyleProperties));
+					else
+						RenderTarget.DrawLine(new Vector2((float)xStart, (float)yMiddle), new Vector2((float)xEnd, (float)yMiddle), Negative.ToDxBrush(RenderTarget), 2, new StrokeStyle(Core.Globals.D2DFactory, strokeStyleProperties));
+				}
+				catch { }
 			}
 		}
-
 
 		private void OnFuckYoCouch(object sender, ElapsedEventArgs e)
 		{
@@ -470,22 +343,17 @@ namespace NinjaTrader.NinjaScript.Indicators
 			FetchData();
 		}
 
-		private void DrawText(float x, float y, string text, int fontSize, SolidColorBrush br)
-		{
-			using TextFormat textFormat = new TextFormat(Core.Globals.DirectWriteFactory, "Arial", FontWeight.Normal, FontStyle.Normal, fontSize);
+        private void DrawText(float x, float y, string text, int fontSize, SolidColorBrush br)
+        {
+            using TextFormat textFormat = new TextFormat(Core.Globals.DirectWriteFactory, "Arial", FontWeight.Normal, FontStyle.Normal, fontSize);
+            RenderTarget.DrawText(text, textFormat, new RectangleF(x, y, x + 200, y + 50), br.ToDxBrush(RenderTarget));
+        }
 
-			// Too many different calls for me to spend the time to caches the brushes
-			// This will work just fine
-			using SharpDX.Direct2D1.Brush brushDX = br.ToDxBrush(RenderTarget); // disposes of brushDX when out of scope
-			RenderTarget.DrawText(text, textFormat, new RectangleF(x, y, x + 200, y + 50), brushDX);
-		}
+        #endregion
 
-		#endregion
+        #region Fetch Data
 
-
-		#region Fetch Data
-
-		private void AddAcross(double price, double vol)
+        private void AddAcross(double price, double vol)
 		{
 			if (lc != null)
 			{
@@ -559,25 +427,16 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 			try
 			{
-				//Print("Calling " + "https://api.gexbot.com/" + ticker + "/" + SubscriptionType + "/" + nextFull + "?key=" + APIKey);
-				//HttpResponseMessage response = await http.GetAsync("https://api.gexbot.com/" +
-				//	ticker + "/" +
-				//	SubscriptionType + "/" +
-				//	nextFull + "?key=" +
-				//	APIKey);
-
-				//Print("stuff: " + stuff);
-				//Print("maxChangesUrl: " + fetchDataUrl);
-
-				HttpResponseMessage response = await http.GetAsync(fetchDataUrl);
+                fetchDataUrl = string.Format("https://api.gexbot.com/{0}/{1}/{2}?key={3}", ticker, SubscriptionType.ToString().ToLower(), nextFull, APIKey);
+                Print("fetchDataUrl = " + fetchDataUrl);
+                HttpResponseMessage response = await http.GetAsync(fetchDataUrl);
 				response.EnsureSuccessStatusCode();
 				string jsonResponse = await response.Content.ReadAsStringAsync();
 				JObject jo = JObject.Parse(jsonResponse);
 				//Print("jsonResponse = " + jsonResponse);
-				//Print("response len: " + jsonResponse.Length + ", JObject count: " + jo.Count);
 
-				string sSection = "strikes";
-				if (isGreekNone)
+				string sSection = isGreekNone ? "strikes" : "mini_contracts";
+                if (isGreekNone)
 				{
 					VolGex = jo["sum_gex_vol"].Value<string>();
 					OIGex = jo["sum_gex_oi"].Value<string>();
@@ -593,7 +452,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 				}
 				else
 				{
-					sSection = "mini_contracts";
 					VolMajPos = jo["major_positive"].Value<string>();
 					VolMinNeg = jo["major_negative"].Value<string>();
 				}
@@ -667,7 +525,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		#endregion
 
-
 		#region TypeConverter
 
 		public class GreekType : TypeConverter
@@ -722,7 +579,6 @@ namespace NinjaTrader.NinjaScript.Indicators
 
 		#endregion
 
-
 		#region Variables
 
 		[Display(Name = "Version", GroupName = GENERAL_GROUP, Order = 0)]
@@ -751,17 +607,21 @@ namespace NinjaTrader.NinjaScript.Indicators
 			Description = "ONE for 1dte, ZERO for only 0dte, FULL for the full aggregation", Order = 4)]
 		public string nextFull { get; set; }
 
-		[NinjaScriptProperty]
+        [NinjaScriptProperty]
+        [Display(Name = "Standard Dot Size", GroupName = GENERAL_GROUP, Order = 5)]
+        public int dotSize { get; set; }
+
+        [NinjaScriptProperty]
 		[TypeConverter(typeof(GreekType))]
-		[Display(Name = "Greek Type", GroupName = GENERAL_GROUP, Order = 5)]
+		[Display(Name = "Greek Type", GroupName = GENERAL_GROUP, Order = 6)]
 		public string Greek { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name = "Greek Dot Size", GroupName = GENERAL_GROUP, Order = 6)]
-		public int dotSize { get; set; }
+		[Display(Name = "Greek Dot Size", GroupName = GENERAL_GROUP, Order = 7)]
+		public int GreekdotSize { get; set; }
 
 		[NinjaScriptProperty]
-		[Display(Name = "Line Length Ratio", GroupName = LINES_GROUP, Order = 7)]
+		[Display(Name = "Line Length Ratio", GroupName = GENERAL_GROUP, Order = 8)]
 		public double WidthFactor { get; set; }
 
 		//[NinjaScriptProperty]
@@ -793,16 +653,15 @@ namespace NinjaTrader.NinjaScript.Indicators
 		[Display(Name = "Show Status Text", GroupName = GENERAL_GROUP, Order = 15)]
 		public bool bShowStatus { get; set; }
 
+        [XmlIgnore]
+        [Display(Name = "Positive Line Color", GroupName = "Colors", Order = 16)]
+        public Brush Positive
+        { get; set; }
 
-		// LINES_GROUP
-
-		[Display(Name = "Positive Line", GroupName = LINES_GROUP, Order = 2)]
-		public Stroke PositiveLine
-		{ get; set; }
-
-		[Display(Name = "Negative Line", GroupName = LINES_GROUP, Order = 3)]
-		public Stroke NegativeLine
-		{ get; set; }
+        [XmlIgnore]
+        [Display(Name = "Negative Line Color", GroupName = "Colors", Order = 17)]
+        public Brush Negative
+        { get; set; }
 
 		#endregion
 	}
@@ -821,18 +680,18 @@ namespace NinjaTrader.NinjaScript.Indicators
 	public partial class Indicator : NinjaTrader.Gui.NinjaScript.IndicatorRenderBase
 	{
 		private GexBot[] cacheGexBot;
-		public GexBot GexBot(string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, string greek, int dotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
+		public GexBot GexBot(string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, int dotSize, string greek, int greekdotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
 		{
-			return GexBot(Input, aPIKey, ticker, subscriptionType, nextFull, greek, dotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
+			return GexBot(Input, aPIKey, ticker, subscriptionType, nextFull, dotSize, greek, greekdotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
 		}
 
-		public GexBot GexBot(ISeries<double> input, string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, string greek, int dotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
+		public GexBot GexBot(ISeries<double> input, string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, int dotSize, string greek, int greekdotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
 		{
 			if (cacheGexBot != null)
 				for (int idx = 0; idx < cacheGexBot.Length; idx++)
-					if (cacheGexBot[idx] != null && cacheGexBot[idx].APIKey == aPIKey && cacheGexBot[idx].ticker == ticker && cacheGexBot[idx].SubscriptionType == subscriptionType && cacheGexBot[idx].nextFull == nextFull && cacheGexBot[idx].Greek == greek && cacheGexBot[idx].dotSize == dotSize && cacheGexBot[idx].WidthFactor == widthFactor && cacheGexBot[idx].convFactor == convFactor && cacheGexBot[idx].iRefresh == iRefresh && cacheGexBot[idx].iCouchRefresh == iCouchRefresh && cacheGexBot[idx].EqualsInput(input))
+					if (cacheGexBot[idx] != null && cacheGexBot[idx].APIKey == aPIKey && cacheGexBot[idx].ticker == ticker && cacheGexBot[idx].SubscriptionType == subscriptionType && cacheGexBot[idx].nextFull == nextFull && cacheGexBot[idx].dotSize == dotSize && cacheGexBot[idx].Greek == greek && cacheGexBot[idx].GreekdotSize == greekdotSize && cacheGexBot[idx].WidthFactor == widthFactor && cacheGexBot[idx].convFactor == convFactor && cacheGexBot[idx].iRefresh == iRefresh && cacheGexBot[idx].iCouchRefresh == iCouchRefresh && cacheGexBot[idx].EqualsInput(input))
 						return cacheGexBot[idx];
-			return CacheIndicator<GexBot>(new GexBot(){ APIKey = aPIKey, ticker = ticker, SubscriptionType = subscriptionType, nextFull = nextFull, Greek = greek, dotSize = dotSize, WidthFactor = widthFactor, convFactor = convFactor, iRefresh = iRefresh, iCouchRefresh = iCouchRefresh }, input, ref cacheGexBot);
+			return CacheIndicator<GexBot>(new GexBot(){ APIKey = aPIKey, ticker = ticker, SubscriptionType = subscriptionType, nextFull = nextFull, dotSize = dotSize, Greek = greek, GreekdotSize = greekdotSize, WidthFactor = widthFactor, convFactor = convFactor, iRefresh = iRefresh, iCouchRefresh = iCouchRefresh }, input, ref cacheGexBot);
 		}
 	}
 }
@@ -841,14 +700,14 @@ namespace NinjaTrader.NinjaScript.MarketAnalyzerColumns
 {
 	public partial class MarketAnalyzerColumn : MarketAnalyzerColumnBase
 	{
-		public Indicators.GexBot GexBot(string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, string greek, int dotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
+		public Indicators.GexBot GexBot(string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, int dotSize, string greek, int greekdotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
 		{
-			return indicator.GexBot(Input, aPIKey, ticker, subscriptionType, nextFull, greek, dotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
+			return indicator.GexBot(Input, aPIKey, ticker, subscriptionType, nextFull, dotSize, greek, greekdotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
 		}
 
-		public Indicators.GexBot GexBot(ISeries<double> input , string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, string greek, int dotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
+		public Indicators.GexBot GexBot(ISeries<double> input , string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, int dotSize, string greek, int greekdotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
 		{
-			return indicator.GexBot(input, aPIKey, ticker, subscriptionType, nextFull, greek, dotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
+			return indicator.GexBot(input, aPIKey, ticker, subscriptionType, nextFull, dotSize, greek, greekdotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
 		}
 	}
 }
@@ -857,14 +716,14 @@ namespace NinjaTrader.NinjaScript.Strategies
 {
 	public partial class Strategy : NinjaTrader.Gui.NinjaScript.StrategyRenderBase
 	{
-		public Indicators.GexBot GexBot(string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, string greek, int dotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
+		public Indicators.GexBot GexBot(string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, int dotSize, string greek, int greekdotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
 		{
-			return indicator.GexBot(Input, aPIKey, ticker, subscriptionType, nextFull, greek, dotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
+			return indicator.GexBot(Input, aPIKey, ticker, subscriptionType, nextFull, dotSize, greek, greekdotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
 		}
 
-		public Indicators.GexBot GexBot(ISeries<double> input , string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, string greek, int dotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
+		public Indicators.GexBot GexBot(ISeries<double> input , string aPIKey, string ticker, GexSubscriptionType subscriptionType, string nextFull, int dotSize, string greek, int greekdotSize, double widthFactor, float convFactor, int iRefresh, int iCouchRefresh)
 		{
-			return indicator.GexBot(input, aPIKey, ticker, subscriptionType, nextFull, greek, dotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
+			return indicator.GexBot(input, aPIKey, ticker, subscriptionType, nextFull, dotSize, greek, greekdotSize, widthFactor, convFactor, iRefresh, iCouchRefresh);
 		}
 	}
 }
